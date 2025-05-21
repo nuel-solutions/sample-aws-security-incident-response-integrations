@@ -1,0 +1,13 @@
+# Top Line Requirements
+aws-cdk-lib>=2.180.0
+aws_cdk.aws_lambda_python_alpha>=2.180.0a0
+cdk-nag>=2.35.37
+constructs>=10.0.0,<11.0.0
+boto3
+botocore
+
+# Function Based Requirements
+-r assets/security_ir_poller/requirements.txt
+-r assets/jira_client/requirements.txt
+-r assets/jira_notifications_handler/requirements.txt
+-r assets/security_ir_client/requirements.txt

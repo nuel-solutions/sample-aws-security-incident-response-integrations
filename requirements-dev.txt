@@ -1,0 +1,14 @@
+-r requirements.txt
+pytest==6.2.5
+pytest-cov
+pytest-xdist
+pytest-mock
+black
+pylint
+isort
+mypy
+types-boto3
+types-requests
+
+ruff
+moto
