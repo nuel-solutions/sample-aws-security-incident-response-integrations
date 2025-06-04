@@ -12,6 +12,7 @@ from aws_cdk import (
     aws_dynamodb as dynamodb,
     aws_events as events,
     aws_logs,
+    aws_sqs,
 )
 from .event_bus_logger_construct import EventBusLoggerConstruct
 from cdk_nag import NagSuppressions
@@ -167,6 +168,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
 
         self.table.grant_read_write_data(self.poller)
         
+        # Add suppressions for IAM5 findings related to wildcard resources
         NagSuppressions.add_resource_suppressions(
             self.poller,
             [
@@ -174,6 +176,47 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
                     "id": "AwsSolutions-IAM5",
                     "reason": "Wildcard resources are required for security-ir, events, and lambda actions",
                     "applies_to": ["Resource::*"]
+                }
+            ],
+            True
+        )
+        
+        # Add stack-level suppressions for all resources
+        NagSuppressions.add_stack_suppressions(
+            self,
+            [
+                {
+                    "id": "AwsSolutions-IAM4",
+                    "reason": "Built-in LogRetention Lambda role requires AWSLambdaBasicExecutionRole managed policy"
+                },
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "Built-in LogRetention Lambda and EventBusLogger need these permissions to manage logs",
+                    "applies_to": ["Resource::*", "Action::logs:*"]
+                },
+                {
+                    "id": "AwsSolutions-SQS3",
+                    "reason": "DLQs are used appropriately in the architecture and don't need their own DLQs"
+                },
+                {
+                    "id": "AwsSolutions-L1",
+                    "reason": "Using the latest available runtime for Python (3.13)"
+                }
+            ]
+        )
+        
+        # Add direct suppressions to the EventBusLogger construct
+        NagSuppressions.add_resource_suppressions(
+            self.event_bus_logger,
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "EventBusLogger requires these permissions to log events to CloudWatch",
+                    "applies_to": ["Resource::*", "Action::logs:*"]
+                },
+                {
+                    "id": "AwsSolutions-SQS3",
+                    "reason": "This is a DLQ for the EventBusLogger and doesn't need its own DLQ"
                 }
             ],
             True

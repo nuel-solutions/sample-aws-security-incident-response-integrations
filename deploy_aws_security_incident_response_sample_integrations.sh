@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# TODO: convert this to Python script instead
 chmod +x deploy_aws_security_incident_response_sample_integrations.sh
 
 # Ask for initial parameter
