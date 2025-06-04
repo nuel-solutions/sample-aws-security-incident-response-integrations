@@ -14,6 +14,8 @@ os.environ["SERVICE_NOW_USER"] = "/test/servicenow/user"
 os.environ["SERVICE_NOW_PASSWORD_PARAM"] = "/test/servicenow/password"
 os.environ["EVENT_SOURCE"] = "security-ir"
 os.environ["LOG_LEVEL"] = "error"
+# Set AWS region for tests
+os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
 
 class TestServiceNowClient(unittest.TestCase):
@@ -27,7 +29,7 @@ class TestServiceNowClient(unittest.TestCase):
 
     @patch('assets.service_now_client.index.ServiceNowClient')
     @patch('assets.service_now_client.index.dynamodb')
-    def test_assert_true(self):
+    def test_assert_true(self, mocker, mock_boto3):
         """Basic assert true test."""
         self.assertTrue(True, "This test should always pass")
 
