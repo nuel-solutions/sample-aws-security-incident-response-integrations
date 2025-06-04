@@ -3,12 +3,22 @@
 import argparse
 import sys
 import os
+import shutil
+
+def get_npx_path():
+    # Find the full path to npx executable
+    npx_path = shutil.which("npx")
+    if not npx_path:
+        print("Error: 'npx' command not found. Please ensure Node.js and npm are installed.")
+        sys.exit(1)
+    return npx_path
 
 def deploy_jira(args):
-    # Use os.execvp which replaces the current process instead of spawning a shell
-    # This is safer as it doesn't involve shell interpretation
+    # Use os.execv with full path which replaces the current process instead of spawning a shell
+    # This is safer as it doesn't involve shell interpretation or path searching
+    npx_path = get_npx_path()
     cmd = [
-        "npx", "cdk", "deploy",
+        npx_path, "cdk", "deploy",
         "--app", "python app_jira.py",
         "AwsSecurityIncidentResponseSampleIntegrationsCommonStack",
         "AwsSecurityIncidentResponseJiraIntegrationStack",
@@ -17,13 +27,14 @@ def deploy_jira(args):
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraUrl={args.url}",
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraToken={args.token}"
     ]
-    os.execvp("npx", cmd)
+    os.execv(npx_path, cmd)
 
 def deploy_servicenow(args):
     print("Service Now integration is under development/maintenance...Please wait for its release")
     # TODO: enable the below commented out code for cdk deploy of Service Now integration once the implementation is complete
+    # npx_path = get_npx_path()
     # cmd = [
-    #     "npx", "cdk", "deploy",
+    #     npx_path, "cdk", "deploy",
     #     "--app", "python app_service_now.py",
     #     "AwsSecurityIncidentResponseSampleIntegrationsCommonStack",
     #     "AwsSecurityIncidentResponseServiceNowIntegrationStack",
@@ -32,7 +43,7 @@ def deploy_servicenow(args):
     #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowUser={args.username}",
     #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowPassword={args.password}"
     # ]
-    # os.execvp("npx", cmd)
+    # os.execv(npx_path, cmd)
 
 def main():
     parser = argparse.ArgumentParser(description='Deploy AWS Security Incident Response Sample Integrations')
