@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
-import subprocess
 import sys
+import os
 
 def deploy_jira(args):
+    # Use os.execvp which replaces the current process instead of spawning a shell
+    # This is safer as it doesn't involve shell interpretation
     cmd = [
         "npx", "cdk", "deploy",
         "--app", "python app_jira.py",
@@ -15,11 +17,11 @@ def deploy_jira(args):
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraUrl={args.url}",
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraToken={args.token}"
     ]
-    subprocess.run(cmd)
+    os.execvp("npx", cmd)
 
 def deploy_servicenow(args):
     print("Service Now integration is under development/maintenance...Please wait for its release")
-    # Uncomment when ready
+    # TODO: enable the below commented out code for cdk deploy of Service Now integration once the implementation is complete
     # cmd = [
     #     "npx", "cdk", "deploy",
     #     "--app", "python app_service_now.py",
@@ -30,7 +32,7 @@ def deploy_servicenow(args):
     #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowUser={args.username}",
     #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowPassword={args.password}"
     # ]
-    # subprocess.run(cmd)
+    # os.execvp("npx", cmd)
 
 def main():
     parser = argparse.ArgumentParser(description='Deploy AWS Security Incident Response Sample Integrations')
