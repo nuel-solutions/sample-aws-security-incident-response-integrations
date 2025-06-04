@@ -27,7 +27,12 @@ def deploy_jira(args):
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraUrl={args.url}",
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraToken={args.token}"
     ]
-    os.execv(npx_path, cmd)
+    os.execv(npx_path, cmd)  # nosec B606
+    # Bandit security scanner is flagging a warning about starting a process without a shell (B606), but this is actually a safer approach for our use case.
+    # The warning is a false positive because:
+    # 1. We're intentionally avoiding shell execution to prevent command injection vulnerabilities
+    # 2. Using os.execv() with full paths is a security best practice for this scenario
+    # 3. The warning is Low severity and Medium confidence
 
 def deploy_servicenow(args):
     print("Service Now integration is under development/maintenance...Please wait for its release")
@@ -43,7 +48,12 @@ def deploy_servicenow(args):
     #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowUser={args.username}",
     #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowPassword={args.password}"
     # ]
-    # os.execv(npx_path, cmd)
+    # os.execv(npx_path, cmd)  # nosec B606
+    # Bandit security scanner is flagging a warning about starting a process without a shell (B606), but this is actually a safer approach for our use case.
+    # The warning is a false positive because:
+    # 1. We're intentionally avoiding shell execution to prevent command injection vulnerabilities
+    # 2. Using os.execv() with full paths is a security best practice for this scenario
+    # 3. The warning is Low severity and Medium confidence
 
 def main():
     parser = argparse.ArgumentParser(description='Deploy AWS Security Incident Response Sample Integrations')
