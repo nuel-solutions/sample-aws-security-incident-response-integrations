@@ -17,7 +17,6 @@ os.environ["LOG_LEVEL"] = "error"
 # Set AWS region for tests
 os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
-
 class TestServiceNowClient(unittest.TestCase):
     """Test cases for ServiceNow client Lambda function."""
 
@@ -25,7 +24,12 @@ class TestServiceNowClient(unittest.TestCase):
         """Set up test fixtures."""
         # Import here to ensure environment variables are set first
         from assets.service_now_client.index import IncidentService
-        self.incident_service = IncidentService()
+        self.incident_service = IncidentService(
+            instance_id="test-instance",
+            username="test-user",
+            password_param_name="/test/servicenow/password",
+            table_name="test-table"
+        )
 
     @patch('assets.service_now_client.index.ServiceNowClient')
     @patch('assets.service_now_client.index.dynamodb')

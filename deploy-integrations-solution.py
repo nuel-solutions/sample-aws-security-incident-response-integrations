@@ -5,20 +5,21 @@ import sys
 import os
 import shutil
 
-def get_npx_path():
-    # Find the full path to npx executable
-    npx_path = shutil.which("npx")
-    if not npx_path:
-        print("Error: 'npx' command not found. Please ensure Node.js and npm are installed.")
+def get_node_path():
+    # Find the full path to node executable
+    node_path = shutil.which("node")
+    if not node_path:
+        print("Error: 'node' command not found. Please ensure Node.js is installed.")
         sys.exit(1)
-    return npx_path
+    return node_path
 
 def deploy_jira(args):
     # Use os.execv with full path which replaces the current process instead of spawning a shell
     # This is safer as it doesn't involve shell interpretation or path searching
-    npx_path = get_npx_path()
+    node_path = get_node_path()
     cmd = [
-        npx_path, "cdk", "deploy",
+        node_path, "--experimental-wasm-reftypes",
+        "node_modules/aws-cdk/bin/cdk.js", "deploy",
         # TODO: use the renamed app_jira.py in the following command once the Service Now integration implementation is complete
         # TODO: see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210524326651427?focus=true
         "--app", "python app.py",
@@ -29,7 +30,7 @@ def deploy_jira(args):
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraUrl={args.url}",
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraToken={args.token}"
     ]
-    os.execv(npx_path, cmd)  # nosec B606
+    os.execv(node_path, cmd)  # nosec B606
     # Bandit security scanner is flagging a warning about starting a process without a shell (B606), but this is actually a safer approach for our use case.
     # The warning is a false positive because:
     # 1. We're intentionally avoiding shell execution to prevent command injection vulnerabilities
@@ -40,9 +41,10 @@ def deploy_servicenow(args):
     print("Service Now integration is under development/maintenance...Please wait for its release")
     # TODO: Uncomment the below code when ServiceNow integration is ready
     # TODO: see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210524326651427?focus=true
-    # npx_path = get_npx_path()
+    # node_path = get_node_path()
     # cmd = [
-    #     npx_path, "cdk", "deploy",
+    #     node_path, "--experimental-wasm-reftypes",
+    #     "node_modules/aws-cdk/bin/cdk.js", "deploy",
     #     "--app", "python app_service_now.py",
     #     "AwsSecurityIncidentResponseSampleIntegrationsCommonStack",
     #     "AwsSecurityIncidentResponseServiceNowIntegrationStack",
@@ -51,7 +53,7 @@ def deploy_servicenow(args):
     #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowUser={args.username}",
     #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowPassword={args.password}"
     # ]
-    # os.execv(npx_path, cmd)  # nosec B606
+    # os.execv(node_path, cmd)  # nosec B606
     # Bandit security scanner is flagging a warning about starting a process without a shell (B606), but this is actually a safer approach for our use case.
     # The warning is a false positive because:
     # 1. We're intentionally avoiding shell execution to prevent command injection vulnerabilities
