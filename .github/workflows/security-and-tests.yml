@@ -79,13 +79,13 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           python -m pip install --upgrade pip
           uv pip install -r requirements.txt
-          npm install aws-cdk
+          npm install -g aws-cdk
 
       - name: Run CDK Nag
         run: |
           # TODO: use the renamed app_jira.py in the following command once the Service Now integration implementation is complete
           # TODO: see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210524326651427?focus=true
-          node --experimental-wasm-reftypes ./node_modules/aws-cdk/bin/cdk.js synth --app "python app.py"
+          node --experimental-wasm-reftypes $(which cdk) synth --app "python app.py"
           # TODO: uncomment/enable the following command once the Service Now integration implementation is complete
           # TODO: see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210524326651427?focus=true
           # node --experimental-wasm-reftypes ./node_modules/.bin/cdk synth --app "python app_service_now.py"
