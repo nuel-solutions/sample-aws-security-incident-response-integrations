@@ -36,13 +36,40 @@ except ImportError:
     # This import works for local development and imports locally from the file system
     from ..wrappers.python.service_now_wrapper import ServiceNowClient
 
+class ParameterService:
+    """Class to handle parameter operations"""
+
+    def __init__(self):
+        """Initialize the parameter service"""
+        self.ssm_client = boto3.client("ssm")
+
+    def get_parameter(self, parameter_name: str) -> Optional[str]:
+        """
+        Get a parameter from SSM Parameter Store
+
+        Args:
+            parameter_name: The name of the parameter to retrieve
+
+        Returns:
+            Parameter value or None if retrieval fails
+        """
+        try:
+            response = self.ssm_client.get_parameter(
+                Name=parameter_name,
+                WithDecryption=True
+            )
+            return response['Parameter']['Value']
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
+            logger.error(f"Error retrieving parameter {parameter_name}: {error_code}")
+            return None
+
 class DatabaseService:
     """Class to handle database operations"""
 
-    def __init__(self):
+    def __init__(self, table_name):
         """Initialize the database service"""
-        self.table_name = os.environ["INCIDENTS_TABLE_NAME"]
-        self.table = dynamodb.Table(self.table_name)
+        self.table = dynamodb.Table(table_name)
 
     def get_case(self, case_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -70,10 +97,15 @@ class DatabaseService:
 class IncidentService:
     """Class to handle incident operations"""
 
-    def __init__(self):
+    def __init__(self, instance_id, username, password_param_name, table_name):
         """Initialize the incident service"""
-        self.service_now_client = ServiceNowClient()
-        self.db_service = DatabaseService()
+        # Initialize ServiceNow client with credentials
+        self.service_now_client = ServiceNowClient(
+            instance_id=instance_id,
+            username=username,
+            password_param_name=password_param_name
+        )
+        self.db_service = DatabaseService(table_name)
 
     def extract_case_details(self, ir_case: Dict[str, Any]) -> Tuple[Dict[str, Any], str, str, str]:
         """
@@ -90,6 +122,7 @@ class IncidentService:
         ir_case_arn = ir_case_detail["caseArn"]
         
         try:
+            # TODO: update the following to retrieve GUID from ARN when the service starts using GUIDs
             ir_case_id = re.search(r"/(\d+)$", ir_case_arn).group(1)
         except (AttributeError, IndexError):
             logger.error(f"Failed to extract case ID from ARN: {ir_case_arn}")
@@ -139,7 +172,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Only process events from Security Incident Response
         EVENT_SOURCE = os.environ.get('EVENT_SOURCE', 'security-ir')
         if event.get("source") == EVENT_SOURCE:
-            incident_service = IncidentService()
+            parameter_service = ParameterService()
+            # Get credentials from SSM
+            instance_id = parameter_service.get_parameter(os.environ.get("SERVICE_NOW_INSTANCE_ID"))
+            username = parameter_service.get_parameter(os.environ.get("SERVICE_NOW_USER"))
+            password_param_name = parameter_service.get_parameter(os.environ.get("SERVICE_NOW_PASSWORD_PARAM"))
+            table_name = os.environ["INCIDENTS_TABLE_NAME"]
+            
+            incident_service = IncidentService(instance_id, username, password_param_name, table_name)
+            # Process event
             incident_service.process_security_incident(event)
         else:
             logger.info(

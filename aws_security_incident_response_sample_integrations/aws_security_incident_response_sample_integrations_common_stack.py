@@ -120,7 +120,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             "SecurityIncidentResponsePoller",
             entry=path.join(path.dirname(__file__), "..", "assets/security_ir_poller"),
             runtime=aws_lambda.Runtime.PYTHON_3_13,
-            timeout=Duration.millis(30000),
+            timeout=Duration.minutes(15),
             layers=[self.domain_layer],
             environment={
                 "INCIDENTS_TABLE_NAME": self.table.table_name,

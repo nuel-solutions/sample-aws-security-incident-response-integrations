@@ -18,8 +18,11 @@ from constructs import Construct
 from .constants import JIRA_AWS_ACCOUNT_ID, JIRA_EVENT_SOURCE, SECURITY_IR_EVENT_SOURCE
 
 class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, common_stack=None, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, common_stack, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
+        
+        if(common_stack is None):
+            raise ValueError("Common stack cannot be null")
         
         # Reference common resources
         table = common_stack.table
@@ -280,7 +283,7 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             "SecurityIncidentResponseJiraClient",
             entry=path.join(path.dirname(__file__), "..", "assets/jira_client"),
             runtime=aws_lambda.Runtime.PYTHON_3_13,
-            timeout=Duration.seconds(30),
+            timeout=Duration.minutes(15),
             layers=[domain_layer, mappers_layer, wrappers_layer],
             environment={
                 "JIRA_EMAIL": "/SecurityIncidentResponse/jiraEmail",
@@ -374,7 +377,7 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             "SecurityIncidentResponseClient",
             entry=path.join(path.dirname(__file__), "..", "assets/security_ir_client"),
             runtime=aws_lambda.Runtime.PYTHON_3_13,
-            timeout=Duration.seconds(30),
+            timeout=Duration.minutes(15),
             layers=[domain_layer, mappers_layer, wrappers_layer],
             environment={
                 "EVENT_SOURCE": JIRA_EVENT_SOURCE,

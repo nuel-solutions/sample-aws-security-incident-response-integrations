@@ -112,7 +112,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
             "SecurityIncidentResponseServiceNowClient",
             entry=path.join(path.dirname(__file__), "..", "assets/service_now_client"),
             runtime=aws_lambda.Runtime.PYTHON_3_13,
-            timeout=Duration.seconds(30),
+            timeout=Duration.minutes(15),
             layers=[domain_layer, mappers_layer, wrappers_layer],
             environment={
                 "SERVICE_NOW_INSTANCE_ID": "/SecurityIncidentResponse/serviceNowInstanceId",

@@ -19,7 +19,9 @@ def deploy_jira(args):
     npx_path = get_npx_path()
     cmd = [
         npx_path, "cdk", "deploy",
-        "--app", "python app_jira.py",
+        # TODO: use the renamed app_jira.py in the following command once the Service Now integration implementation is complete
+        # TODO: see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210524326651427?focus=true
+        "--app", "python app.py",
         "AwsSecurityIncidentResponseSampleIntegrationsCommonStack",
         "AwsSecurityIncidentResponseJiraIntegrationStack",
         "--parameters", f"AwsSecurityIncidentResponseSampleIntegrationsCommonStack:logLevel={args.log_level}",
@@ -36,7 +38,8 @@ def deploy_jira(args):
 
 def deploy_servicenow(args):
     print("Service Now integration is under development/maintenance...Please wait for its release")
-    # TODO: enable the below commented out code for cdk deploy of Service Now integration once the implementation is complete
+    # TODO: Uncomment the below code when ServiceNow integration is ready
+    # TODO: see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210524326651427?focus=true
     # npx_path = get_npx_path()
     # cmd = [
     #     npx_path, "cdk", "deploy",
