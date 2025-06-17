@@ -17,7 +17,8 @@ from boto3.dynamodb.conditions import Key, Attr
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-JIRA_UPDATE_TAG = "[JIRA UPDATE]"
+UPDATE_TAG_TO_SKIP = "[AWS Security Incident Response Update]"
+UPDATE_TAG_TO_ADD = "[JIRA Update]"
 
 # Try to import from Lambda layer
 try:
@@ -101,15 +102,13 @@ def process_jira_event(jira_issue: dict) -> None:
                 )
 
         # add comments
-        if jira_issue_detail["comments"]:
-            for comment in jira_issue_detail["comments"]:
-                logger.info(
-                    f"Adding comment to Security IR case {security_ir_case_id}"
-                )
-                incident_service.add_comment_to_security_ir_case(
-                    security_ir_case_id=security_ir_case_id,
-                    ir_case_comment=comment["body"],
-                )
+        # if jira_issue_detail["comments"]:
+        #     for comment in jira_issue_detail["comments"]:
+        #         logger.info(f"Adding comment to Security IR case {security_ir_case_id}")
+                # incident_service.add_comment_to_security_ir_case(
+                #     security_ir_case_id=security_ir_case_id,
+                #     ir_case_comment=comment["body"],
+                # )
 
     elif jira_event_type == "IssueUpdated":
         # add comment
@@ -122,7 +121,7 @@ def process_jira_event(jira_issue: dict) -> None:
         # get case ID from ddb
         security_ir_case_id = database_service.get_security_ir_case_id_from_database(
             jira_issue_id=jira_issue_key
-        )        
+        )
 
         # add case ID to case object
         security_ir_fields["caseId"] = security_ir_case_id
@@ -143,11 +142,37 @@ def process_jira_event(jira_issue: dict) -> None:
             jira_comment_bodies = [comment["body"] for comment in jira_comments]
 
             # add missing comments to case
+            # iterate Jira comments
+            
             for jira_comment in jira_comment_bodies:
-                if str(jira_comment) not in sir_comment_bodies and f"{JIRA_UPDATE_TAG} {jira_comment}" not in sir_comment_bodies:
-                    logger.info(
-                        f"Adding comment to Security IR case {security_ir_case_id}"
-                    )
+                add_comment = True
+                logger.info("IRC - Jira comment: '%s'", jira_comment)
+                # iterate Security IR comments
+
+                if UPDATE_TAG_TO_SKIP in jira_comment:
+                    add_comment = False
+                
+                for sir_comment in sir_comment_bodies:
+                    logger.info("IRC - Security IR comment: '%s'", sir_comment)
+
+                    # extract Jira comment from tags
+                    pattern = r"\](.*)"
+                    match = re.search(pattern, jira_comment)
+                    if match:
+                        jira_comment = match.group(1).strip()
+
+                    # extract Security IR comment from tags
+                    pattern = r"\](.*)"
+                    match = re.search(pattern, sir_comment)
+                    if match:
+                        sir_comment = match.group(1).strip()
+
+                    if str(jira_comment).strip() == str(sir_comment).strip():
+                        add_comment = False
+                    
+                if add_comment is True:
+                    jira_comment = f"{UPDATE_TAG_TO_ADD} {jira_comment}"
+                    logger.info("Adding comment '%s' to Security IR case %s", jira_comment, security_ir_case_id)
                     _ = incident_service.add_comment_to_security_ir_case(
                         security_ir_case_id=security_ir_case_id,
                         ir_case_comment=jira_comment,
@@ -176,14 +201,16 @@ def process_jira_event(jira_issue: dict) -> None:
                         f"Adding attachment to Security IR case {security_ir_case_id}"
                     )
 
-                    # add attaachment to Security IR case
+                    # add attachment to Security IR case
                     _ = incident_service.add_attachment_to_security_ir_case(
                         security_ir_case_id=security_ir_case_id,
                         attachment_filename=jira_attachment_name,
                     )
 
         else:  # create case because doesn't exist in database
-            logger.info(f"Security IR case not found for {jira_issue_key} not found in database. Creating ...")
+            logger.info(
+                f"Security IR case not found for {jira_issue_key} not found in database. Creating ..."
+            )
 
             _ = incident_service.create_security_ir_case(
                 jira_issue_details=jira_issue_detail
@@ -343,23 +370,25 @@ class IncidentService:
                 )
                 return False
 
-        else:
+        elif security_ir_case_status != "Submitted":
             try:
                 request_kwargs = {
                     "caseId": security_ir_case_id,
                     "caseStatus": security_ir_case_status,
                 }
-                #TODO: Support different case status transitions so that case can be set
-                #to any status via update from Jira
+                # TODO: Support different case status transitions so that case can be set
+                # to any status via update from Jira
                 update_result = security_ir_client.update_case_status(**request_kwargs)
-                logger.info(f"Updated status of Security IR case {security_ir_case_id}: {update_result}")
+                logger.info(
+                    f"Updated status of Security IR case {security_ir_case_id}: {update_result}"
+                )
                 return True
 
             except Exception as e:
                 logger.error(
                     f"Could not update status of Security IR case {security_ir_case_id} to {security_ir_case_status}: {str(e)}"
                 )
-                
+
                 return False
 
         return True
@@ -397,12 +426,12 @@ class IncidentService:
             True if successful, False otherwise
         """
 
-        logger.info(f"Adding comment to Security IR case {security_ir_case_id}")
-        ir_case_comment = f"{JIRA_UPDATE_TAG} {ir_case_comment}"
+        #logger.info(f"Adding comment to Security IR case {security_ir_case_id}")
+        #ir_case_comment = f"{UPDATE_TAG_TO_ADD} {ir_case_comment}"
 
         try:
             request_kwargs = {"caseId": security_ir_case_id, "body": ir_case_comment}
-            logger.info(f"Request kwargs: {request_kwargs}")
+            #logger.info(f"Request kwargs: {request_kwargs}")
             _ = security_ir_client.create_case_comment(**request_kwargs)
         except Exception as e:
             logger.error(
@@ -467,8 +496,7 @@ class IncidentService:
                 "watchers": default_watchers,
                 "threatActorIpAddresses": default_threat_actor_ip_addresses,
                 "impactedAwsRegions": default_impacted_regions,
-                "impactedServices": ["TBD"]
-
+                "impactedServices": ["TBD"],
             }
             logger.info(
                 "Required values not provided in Jira issue, using default values for Security IR case creation. Please update the Security IR case with actual values."
@@ -540,7 +568,7 @@ class IncidentService:
         Returns:
             True if add is successful, False otherwise
         """
-        comment = f"Jira issue has an attachment: {attachment_filename}. Download the file from the associated Jira issue."
+        comment = f"{UPDATE_TAG_TO_ADD} Jira issue has an attachment: {attachment_filename}. Download the file from the associated Jira issue."
 
         try:
             # TODO: add support to copy binary file attachment from Jira to Security IR
@@ -598,3 +626,4 @@ def handler(event, context) -> dict:
             "Security Incident Response Client Lambda function processing completed"
         ),
     }
+
