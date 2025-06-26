@@ -285,7 +285,6 @@ class CommentService:
 
         # iterate Security IR comments
         for sir_comment in sir_comment_bodies:
-            #logger.info("JIR - SIR comment: '%s'", sir_comment)
             add_comment = True
 
             if UPDATE_TAG_TO_SKIP in sir_comment:
@@ -293,28 +292,12 @@ class CommentService:
             
             # iterate Jira comments
             for jira_comment in jira_comment_bodies:
-                #logger.info("JIR - Jira comment: '%s'", jira_comment)
-
-                # extract Jira comment from tags
-                pattern = r"\](.*)"
-                match = re.search(pattern, jira_comment)
-                if match:
-                    jira_comment = match.group(1).strip()
-
-                # extract Security IR comment from tags
-                pattern = r"\](.*)"
-                match = re.search(pattern, sir_comment)
-                if match:
-                    sir_comment = match.group(1).strip()
-
                 if str(jira_comment).strip() == str(sir_comment).strip():
                     add_comment = False
 
             if add_comment is True:
-                jira_comment = f"{UPDATE_TAG_TO_ADD} {sir_comment}"
-                logger.info("Adding comment '%s' to Jira issue %s", jira_comment, jira_issue_id)
-                self.jira_client.add_comment(jira_issue_id, jira_comment)
-
+                logger.info("Adding comment '%s' to Jira issue %s", sir_comment, jira_issue_id)
+                self.jira_client.add_comment(jira_issue_id, sir_comment)
 
 class IncidentService:
     """Class to handle incident operations"""
