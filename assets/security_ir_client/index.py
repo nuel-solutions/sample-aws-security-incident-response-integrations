@@ -101,15 +101,6 @@ def process_jira_event(jira_issue: dict) -> None:
                     attachment_filename=attachment_filename,
                 )
 
-        # add comments
-        # if jira_issue_detail["comments"]:
-        #     for comment in jira_issue_detail["comments"]:
-        #         logger.info(f"Adding comment to Security IR case {security_ir_case_id}")
-                # incident_service.add_comment_to_security_ir_case(
-                #     security_ir_case_id=security_ir_case_id,
-                #     ir_case_comment=comment["body"],
-                # )
-
     elif jira_event_type == "IssueUpdated":
         # add comment
         ir_case_comment = "The equivalent issue in Jira for this Security Incident case has been updated. Please verify below details."
@@ -141,37 +132,17 @@ def process_jira_event(jira_issue: dict) -> None:
             sir_comment_bodies = [comment["body"] for comment in sir_comments["items"]]
             jira_comment_bodies = [comment["body"] for comment in jira_comments]
 
-            # add missing comments to case
-            # iterate Jira comments
-            
             for jira_comment in jira_comment_bodies:
                 add_comment = True
-                logger.info("IRC - Jira comment: '%s'", jira_comment)
-                # iterate Security IR comments
 
                 if UPDATE_TAG_TO_SKIP in jira_comment:
                     add_comment = False
                 
                 for sir_comment in sir_comment_bodies:
-                    logger.info("IRC - Security IR comment: '%s'", sir_comment)
-
-                    # extract Jira comment from tags
-                    pattern = r"\](.*)"
-                    match = re.search(pattern, jira_comment)
-                    if match:
-                        jira_comment = match.group(1).strip()
-
-                    # extract Security IR comment from tags
-                    pattern = r"\](.*)"
-                    match = re.search(pattern, sir_comment)
-                    if match:
-                        sir_comment = match.group(1).strip()
-
                     if str(jira_comment).strip() == str(sir_comment).strip():
                         add_comment = False
                     
                 if add_comment is True:
-                    jira_comment = f"{UPDATE_TAG_TO_ADD} {jira_comment}"
                     logger.info("Adding comment '%s' to Security IR case %s", jira_comment, security_ir_case_id)
                     _ = incident_service.add_comment_to_security_ir_case(
                         security_ir_case_id=security_ir_case_id,
@@ -269,7 +240,6 @@ class DatabaseService:
             response = self.ddb_table.scan(
                 FilterExpression=Attr("jiraIssueId").eq(jira_issue_id), Limit=1000
             )
-            # logger.info(f"Response from DynamoDB: {response}")
             if response["Items"] == []:
                 logger.info(
                     f"Security IR case for Jira issue {jira_issue_id} not found in database"
@@ -426,12 +396,8 @@ class IncidentService:
             True if successful, False otherwise
         """
 
-        #logger.info(f"Adding comment to Security IR case {security_ir_case_id}")
-        #ir_case_comment = f"{UPDATE_TAG_TO_ADD} {ir_case_comment}"
-
         try:
             request_kwargs = {"caseId": security_ir_case_id, "body": ir_case_comment}
-            #logger.info(f"Request kwargs: {request_kwargs}")
             _ = security_ir_client.create_case_comment(**request_kwargs)
         except Exception as e:
             logger.error(
