@@ -49,7 +49,7 @@ logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
 security_ir_client = boto3.client("security-ir")
-
+dynamodb = boto3.resource("dynamodb")
 
 def process_jira_event(jira_issue: dict) -> None:
     """
@@ -121,6 +121,7 @@ def process_jira_event(jira_issue: dict) -> None:
 
         if security_ir_case_id:
             _ = incident_service.update_security_ir_case(
+                security_ir_case_id=security_ir_case_id,
                 security_ir_case=security_ir_fields
             )
 
@@ -190,12 +191,10 @@ def process_jira_event(jira_issue: dict) -> None:
 
 class DatabaseService:
     """Class to handle database operations"""
-
-    dynamodb = boto3.resource("dynamodb")
-    ddb_table = dynamodb.Table(os.environ["INCIDENTS_TABLE_NAME"])
-
     def __init__(self):
         """Initialize the database manager"""
+        self.table_name = os.environ["INCIDENTS_TABLE_NAME"]
+        self.table = dynamodb.Table(self.table_name)
 
     def add_item(self, jira_issue_details: dict, security_ir_case: dict) -> None:
         """
@@ -211,7 +210,7 @@ class DatabaseService:
             security_ir_case_id = security_ir_case["caseId"]
             ddb_pk = f"Case#{security_ir_case_id}"
 
-            self.ddb_table.put_item(
+            self.table.put_item(
                 Item={
                     "PK": ddb_pk,
                     "SK": "latest",
@@ -237,7 +236,7 @@ class DatabaseService:
             Security Incident Response Case Id
         """
         try:
-            response = self.ddb_table.scan(
+            response = self.table.scan(
                 FilterExpression=Attr("jiraIssueId").eq(jira_issue_id), Limit=1000
             )
             if response["Items"] == []:
@@ -263,6 +262,36 @@ class DatabaseService:
         except KeyError:
             logger.info(f"Jira issue for Case#{jira_issue_id} not found in database")
             return None
+        
+
+    def update_case_in_database(
+        self, security_ir_case_id: str, case_details: dict
+    ) -> bool:
+        """
+        Update Security IR case details in the database
+
+        Args:
+            case_details: Security IR case details
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Extract serializable details from the Jira issue object
+            #serializable_details = extract_jira_issue_details(issue_details)
+            #case_id = case_details["caseId"]
+
+            # Update the database
+            self.table.update_item(
+                Key={"PK": f"Case#{security_ir_case_id}", "SK": "latest"},
+                UpdateExpression="set incidentDetails = :j",
+                ExpressionAttributeValues={":j": json.dumps(case_details, default=json_datetime_encoder)},
+                ReturnValues="UPDATED_NEW",
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error updating Security IR case details in DynamoDB: {str(e)}")
+            return False
 
 
 class IncidentService:
@@ -271,8 +300,10 @@ class IncidentService:
     def __init__(self):
         """Initialize the incident manager"""
         self.ir_client = SecurityIRClient()
+        self.db_service = DatabaseService()
 
-    def update_security_ir_case(self, security_ir_case: dict) -> bool:
+
+    def update_security_ir_case(self, security_ir_case_id: str, security_ir_case: dict) -> bool:
         """
         Updates Security IR case using API
 
@@ -282,8 +313,7 @@ class IncidentService:
         Returns:
             result of update attempt
         """
-        logger.info(f"Security IR case: {security_ir_case}")
-        security_ir_case_id = security_ir_case["caseId"]
+
         # TODO: Add watcher support
         # watchers
         # logger.info(f"Security IR case {security_ir_case}")
@@ -304,31 +334,45 @@ class IncidentService:
                 "title": security_ir_case["title"],
                 "description": security_ir_case["description"],
             }
+            # 1. update case in Security IR
             _ = security_ir_client.update_case(**request_kwargs)
+            logger.info(f"Updated Security IR case {security_ir_case_id} via API")
 
-            # update case status
-            _ = self.update_security_ir_case_status(security_ir_case)
+            # 2. update case status via API
+            case_status = security_ir_case["status"]
+            _ = self.update_security_ir_case_status(security_ir_case_id=security_ir_case_id, security_ir_case_status=case_status)
+            logger.info(f"Updated Security IR case {security_ir_case_id} status via API")
 
+            # 3. get JSON from Security IR API
+            case_details = self.get_security_ir_case(security_ir_case_id=security_ir_case_id)
+
+            # 4. update databse with Security IR JSON
+            self.db_service.update_case_in_database(security_ir_case_id=security_ir_case_id, case_details=case_details)
+            logger.info(f"Updated Security IR case {security_ir_case_id} in database")
+
+            
         except Exception as e:
             logger.error(
-                f"Error updating Security IR case {security_ir_case_id}: {str(e)}"
+                f"Error updating Security IR case {security_ir_case_id}: {e}"
             )
             return False
 
         return True
 
-    def update_security_ir_case_status(self, security_ir_case: dict) -> bool:
+    def update_security_ir_case_status(self, security_ir_case_id: str, security_ir_case_status: str) -> bool:
         """
         Updates Security IR case status using API
 
         Args:
             Security IR case
+            Security IR case status
 
         Returns:
             result of update status attempt
         """
-        security_ir_case_id = security_ir_case["caseId"]
-        security_ir_case_status = security_ir_case["status"]
+        # extract case ID from payload
+        #security_ir_case_id = security_ir_case["caseId"]
+        #security_ir_case_status = security_ir_case["detail"]["status"]
         if security_ir_case_status == "Closed":
             try:
                 request_kwargs = {"caseId": security_ir_case_id}
@@ -499,6 +543,7 @@ class IncidentService:
         return security_ir_case_id
 
     def get_security_ir_case(self, security_ir_case_id: str) -> dict:
+        #logger.info(f"get_security_ir_case() case_id: {security_ir_case_id}")
         """
         Gets Security IR case based on case ID
 
@@ -510,7 +555,10 @@ class IncidentService:
         """
         try:
             kwargs = {"caseId": security_ir_case_id}
+            #logger.info(f"get_security_ir_case() request_kwargs: {kwargs}")
+
             security_ir_case = security_ir_client.get_case(**kwargs)
+            #logger.info(f"get_security_ir_case() response: {security_ir_case}")
             return security_ir_case
 
         except Exception as e:
