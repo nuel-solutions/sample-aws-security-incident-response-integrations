@@ -383,13 +383,6 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             description="Jira Client Lambda Function ARN",
         )
         
-        CfnOutput(
-            self,
-            "SecurityIRClientLambdaArn",
-            value=security_ir_client.function_arn,
-            description="Security Incident Response Client Lambda Function ARN",
-        )
-        
         # Output Jira notifications handler log group info
         CfnOutput(
             self,

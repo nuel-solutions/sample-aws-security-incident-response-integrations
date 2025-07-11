@@ -1,5 +1,6 @@
 from os import path
 from aws_cdk import (
+    CfnOutput,
     CfnParameter,
     Duration,
     RemovalPolicy,
@@ -217,7 +218,8 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             timeout=Duration.minutes(15),
             layers=[self.domain_layer, self.mappers_layer, self.wrappers_layer],
             environment={
-                "EVENT_SOURCE": JIRA_EVENT_SOURCE,
+                "JIRA_EVENT_SOURCE": JIRA_EVENT_SOURCE,
+                # Add ServiceNow event source
                 "INCIDENTS_TABLE_NAME": self.table.table_name
             },
             role=security_ir_client_role
@@ -257,6 +259,13 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
         
         # Grant specific DynamoDB permissions instead of full access
         self.table.grant_read_write_data(security_ir_client)
+        
+        CfnOutput(
+            self,
+            "SecurityIRClientLambdaArn",
+            value=security_ir_client.function_arn,
+            description="Security Incident Response Client Lambda Function ARN",
+        )
         
         # Add suppressions for IAM5 findings related to wildcard resources
         NagSuppressions.add_resource_suppressions(

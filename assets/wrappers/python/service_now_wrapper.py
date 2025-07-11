@@ -8,7 +8,6 @@ import logging
 import boto3
 from typing import Dict, Optional, Any
 from pysnc import ServiceNowClient as SnowClient
-from flask import session
 
 # Import mappers with fallbacks for different environments
 try:
