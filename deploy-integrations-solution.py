@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+#TODO: add a flag for running the test, add a prompt after the cdk deploy asking the users for running the test based on the input. This test will be python script that craetes case/incidents in SIR and SNOW. Use Questionary
+
 import argparse
 import subprocess  # nosec B404
 import sys
@@ -31,6 +33,7 @@ def deploy_jira(args):
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraEmail={args.email}",
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraUrl={args.url}",
         "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraToken={args.token}"
+        "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraProjectKey={args.project_key}"
     ]
     # os.execv(node_path, cmd)  # nosec B606
     # Explicitly setting shell=False - This ensures no shell interpretation occurs, preventing command injection vulnerabilities
@@ -78,6 +81,7 @@ def main():
     jira_parser.add_argument('--email', required=True, help='Jira email')
     jira_parser.add_argument('--url', required=True, help='Jira URL')
     jira_parser.add_argument('--token', required=True, help='Jira API token')
+    jira_parser.add_argument('--project-key', required=True, help='Jira Project key')
     jira_parser.set_defaults(func=deploy_jira)
     
     # ServiceNow integration

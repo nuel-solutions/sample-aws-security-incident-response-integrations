@@ -7,7 +7,7 @@ import os
 import logging
 import boto3
 from typing import Dict, Optional, Any
-from pysnc import ServiceNowClient as SnowClient
+from pysnc import ServiceNowClient as SnowClient, GlideRecord
 
 # Import mappers with fallbacks for different environments
 try:
@@ -24,6 +24,7 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 ssm_client = boto3.client("ssm")
 
+#TODO: Consider refactoring the micro-service implementation in the solution to use the Singleton or Factory method design pattern. See https://refactoring.guru/design-patterns/python
 class ServiceNowClient:
     """Class to handle ServiceNow API interactions"""
 
@@ -39,9 +40,9 @@ class ServiceNowClient:
         self.instance_id = instance_id
         self.username = username
         self.password_param_name = password_param_name
-        self.client = self._create_client()
+        self.client = self.__create_client()
 
-    def _create_client(self) -> Optional[SnowClient]:
+    def __create_client(self) -> Optional[SnowClient]:
         """
         Create a ServiceNow client instance
         
@@ -88,7 +89,7 @@ class ServiceNowClient:
             logger.error(f"Error retrieving ServiceNow password from SSM: {str(e)}")
             return None
         
-    def __get_glide_record(self, record_type):
+    def __get_glide_record(self, record_type) -> GlideRecord:
         """
         Prepare a Glide Record using ServiceNowClient for querying
         
@@ -102,7 +103,7 @@ class ServiceNowClient:
             logger.error(f"Error preparing GlideRecord: {str(e)}")
             return None
 
-    def __prepare_service_now_incident(self, glide_record: Any, fields: Dict[str, Any]):
+    def __prepare_service_now_incident(self, glide_record: GlideRecord, fields: Dict[str, Any]):
         """
         Prepare ServiceNow Glide Record for incident creation
         

@@ -302,7 +302,7 @@ class IncidentService:
         
         return ir_case_detail, ir_event_type, ir_case_id, sir_case_status
 
-    def prepare_service_now_fields(self, ir_case_detail: Dict[str, Any], ir_case_id: str) -> Dict[str, Any]:
+    def map_sir_case_to_snow_incident(self, ir_case_detail: Dict[str, Any], ir_case_id: str) -> Dict[str, Any]:
         """
         Prepare ServiceNow fields from IR case details
         
@@ -343,7 +343,7 @@ class IncidentService:
                 return None
             
             # Prepare ServiceNow fields
-            service_now_fields = self.prepare_service_now_fields(ir_case_detail, ir_case_id)
+            service_now_fields = self.map_sir_case_to_snow_incident(ir_case_detail, ir_case_id)
             
             # Get status mapping
             service_now_status = None
@@ -408,7 +408,7 @@ class IncidentService:
         """
         # Get case details from database
         case_from_ddb = self.db_service.get_case(ir_case_id)
-        if not case_from_ddb or "Item" not in case_from_ddb:
+        if not case_from_ddb and "Item" not in case_from_ddb:
             logger.error(f"No Security IR case found in database for IR case {ir_case_id}")
             return None
             
@@ -419,13 +419,10 @@ class IncidentService:
         if service_now_incident_id is None:
             logger.info(f"No ServiceNow incident found for IR case {ir_case_id} in database, creating ServiceNow incident...")
             return self.handle_case_creation(ir_case_id, service_now_fields)
-        
-        # Update existing incident in ServiceNow
-        self.service_now_service.update_incident(service_now_incident_id, service_now_fields)
-        
-        # Update status if needed
-        # if service_now_status:
-        #     self.service_now_service.update_status(service_now_incident_id, service_now_status, status_comment)
+        else:        
+            # Update existing incident in ServiceNow
+            logger.info(f"ServiceNow incident {service_now_incident_id} found for IR case {ir_case_id} in database, updating ServiceNow incident...")
+            self.service_now_service.update_incident(service_now_incident_id, service_now_fields)
         
         # Get ServiceNow incident latest details post update
         service_now_incident = self.service_now_service.get_incident(service_now_incident_id)
@@ -462,7 +459,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             incident_service = IncidentService(instance_id, username, password_param_name, table_name)
             # Process event
-            incident_service.process_security_incident(event)
+            incident_id = incident_service.process_security_incident(event)
+            if incident_id is None:
+                logger.error("Event processing failed. Incident not created in Service Now.")
         else:
             logger.info(
                 "ServiceNow Client lambda will skip processing of this event as the event source is not security-ir"

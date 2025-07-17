@@ -240,9 +240,6 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             aws_iam.PolicyStatement(
                 effect=aws_iam.Effect.ALLOW,
                 actions=[
-                    "dynamodb:PutItem", 
-                    "dynamodb:GetItem", 
-                    "dynamodb:UpdateItem",
                     "security-ir:UpdateCase",
                     "security-ir:CreateCaseComment",
                     "security-ir:UpdateCaseComment",
@@ -273,7 +270,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             [
                 {
                     "id": "AwsSolutions-IAM5",
-                    "reason": "Wildcard resources are required for DynamoDB actions",
+                    "reason": "Wildcard resources are required for security-ir actions",
                     "applies_to": ["Resource::*"]
                 }
             ],

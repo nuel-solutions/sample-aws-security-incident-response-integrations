@@ -9,3 +9,8 @@ SERVICE_NOW_AWS_ACCOUNT_ID = "XXXXXXXXXXXX"
 JIRA_EVENT_SOURCE = "jira"
 SERVICE_NOW_EVENT_SOURCE = "service-now"
 SECURITY_IR_EVENT_SOURCE = "security-ir"
+
+# Integration target constants
+JIRA_ISSUE_TYPE = "Task"
+
+# ServiceNow automation constants

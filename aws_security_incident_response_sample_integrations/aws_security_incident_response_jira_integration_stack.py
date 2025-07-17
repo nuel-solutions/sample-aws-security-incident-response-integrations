@@ -15,14 +15,12 @@ from aws_cdk import (
 )
 from cdk_nag import NagSuppressions
 from constructs import Construct
-from .constants import JIRA_AWS_ACCOUNT_ID, JIRA_EVENT_SOURCE, SECURITY_IR_EVENT_SOURCE
+from .constants import JIRA_AWS_ACCOUNT_ID, JIRA_EVENT_SOURCE, SECURITY_IR_EVENT_SOURCE, JIRA_ISSUE_TYPE
+from .aws_security_incident_response_sample_integrations_common_stack import AwsSecurityIncidentResponseSampleIntegrationsCommonStack
 
 class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, common_stack, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, common_stack: AwsSecurityIncidentResponseSampleIntegrationsCommonStack, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
-        
-        if(common_stack is None):
-            raise ValueError("Common stack cannot be null")
         
         # Reference common resources
         table = common_stack.table
@@ -62,6 +60,13 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             no_echo=True,
         )
         
+        jira_project_param = CfnParameter(
+            self, 
+            "jiraProjectKey", 
+            type="String", 
+            description="The key of the Jira Project.",
+        )
+        
         # Create SSM parameters
         jira_token_ssm_param = aws_ssm.StringParameter(
             self,
@@ -83,6 +88,14 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             parameter_name="/SecurityIncidentResponse/jiraUrl",
             string_value=jira_url_param.value_as_string,
             description="Jira URL",
+        ) 
+        
+        jira_project_ssm = aws_ssm.StringParameter(
+            self,
+            "jiraProjectKeySSM",
+            parameter_name="/SecurityIncidentResponse/jiraProjectKey",
+            string_value=jira_project_param.value_as_string,
+            description="Jira Project Key",
         )
         
         """
@@ -290,6 +303,8 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
                 "JIRA_URL": "/SecurityIncidentResponse/jiraUrl",
                 "INCIDENTS_TABLE_NAME": table.table_name,
                 "JIRA_TOKEN_PARAM": jira_token_ssm_param.parameter_name,
+                "JIRA_PROJECT_KEY": "/SecurityIncidentResponse/jiraProjectKey",
+                "JIRA_ISSUE_TYPE": JIRA_ISSUE_TYPE,
                 "EVENT_SOURCE": SECURITY_IR_EVENT_SOURCE,
                 "LOG_LEVEL": log_level_param.value_as_string
             },
