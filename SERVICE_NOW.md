@@ -26,6 +26,7 @@ deploy-integrations-solution service-now \
   --password <your-servicenow-password> \
   --log-level info
 ```
+See the section below for instructions on how to obtain your ServiceNow instance id, username and password
 
 ## Prerequisites
 

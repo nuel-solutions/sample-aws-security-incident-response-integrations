@@ -29,7 +29,7 @@ deploy-integrations-solution jira \
   --log-level {info, debug, error}
 ```
 
-See [Prerequisites](#prerequisites) section below for instructions on how to obtain your Jira email, URL, and API token.
+See the section below for instructions on how to obtain your Jira email, URL, and API token.
 
 ## Prerequisites
 
