@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-import subprocess
+import subprocess # nosec B404
 import sys
 import textwrap
 
@@ -19,7 +19,8 @@ def deploy_jira(args):
             "--parameters", f"AwsSecurityIncidentResponseJiraIntegrationStack:jiraProjectKey={args.project_key}"
         ]
         print("\n🔄 Deploying Jira integration...\n")
-        result = subprocess.run(cmd, check=True) # nosec B404 B603
+        # Using subprocess with a list of arguments is safe from shell injection
+        result = subprocess.run(cmd, check=True)  # nosec B603
         if result.returncode == 0:
             print("\n✅ Jira integration deployed successfully!")
         return result.returncode
@@ -44,7 +45,8 @@ def deploy_servicenow(args):
         #     "--parameters", f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowPassword={args.password}"
         # ]
         # print("\n🔄 Deploying ServiceNow integration...\n")
-        # result = subprocess.run(cmd, check=True)
+        # # Using subprocess with a list of arguments is safe from shell injection
+        # result = subprocess.run(cmd, check=True)  # nosec B603
         # if result.returncode == 0:
         #     print("\n✅ ServiceNow integration deployed successfully!")
         # return result.returncode
