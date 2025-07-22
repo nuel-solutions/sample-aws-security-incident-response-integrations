@@ -4,6 +4,7 @@ This document provides detailed information on troubleshooting, validation, and 
 
 ## Table of Contents
 
+- [Setup and Configuration](#setup-and-configuration)
 - [Outputs and Validation](#outputs-and-validation)
   - [Using CloudFormation Outputs](#using-cloudformation-outputs)
   - [Validating ServiceNow Resources](#validating-servicenow-resources)
@@ -11,6 +12,40 @@ This document provides detailed information on troubleshooting, validation, and 
   - [Common Issues and Solutions](#common-issues-and-solutions)
   - [Diagnostic Steps](#diagnostic-steps)
 - [Security Considerations](#security-considerations)
+
+## Setup and Configuration
+
+1. **Prepare ServiceNow**:
+   - Ensure you have a ServiceNow instance with admin access
+   - Create a dedicated service account for the integration if needed
+
+2. **Deploy the Stack**:
+   ```bash
+   # Using the deploy-integrations-solution script
+   deploy-integrations-solution service-now \
+     --instance-id <your-servicenow-instance-id> \
+     --username <your-servicenow-username> \
+     --password <your-servicenow-password> \
+     --log-level info
+   ```
+   
+   Note: The `--log-level` parameter is optional and defaults to `error`. Valid values are `info`, `debug`, and `error`.
+
+3. **Automatic Configuration**:
+   - The ServiceNow Resource Setup Lambda will automatically:
+     - Create business rules in ServiceNow to detect incident changes
+     - Configure outbound REST messages to send data to the API Gateway
+     - Set up the webhook URL in ServiceNow
+
+4. **Verify the Setup**:
+   - Check CloudFormation outputs for the webhook URL
+   - Verify in ServiceNow that the business rules and outbound REST messages were created
+   - The business rules will be prefixed with the Lambda function name for easy identification
+
+5. **Test the Integration**:
+   - Create a test incident in ServiceNow
+   - Verify that the incident appears in AWS Security Incident Response
+   - Update the incident in AWS and verify the changes appear in ServiceNow
 
 ## Outputs and Validation
 
@@ -90,6 +125,40 @@ To validate the resources created in ServiceNow:
    - Navigate to System Definition > Script Includes
    - Look for script includes related to the AWS integration
    - Verify they contain the correct formatting logic for incident data
+
+## Setup and Configuration
+
+1. **Prepare ServiceNow**:
+   - Ensure you have a ServiceNow instance with admin access
+   - Create a dedicated service account for the integration if needed
+
+2. **Deploy the Stack**:
+   ```bash
+   # Using the deploy-integrations-solution script
+   deploy-integrations-solution service-now \
+     --instance-id <your-servicenow-instance-id> \
+     --username <your-servicenow-username> \
+     --password <your-servicenow-password> \
+     --log-level info
+   ```
+   
+   Note: The `--log-level` parameter is optional and defaults to `error`. Valid values are `info`, `debug`, and `error`.
+
+3. **Automatic Configuration**:
+   - The ServiceNow Resource Setup Lambda will automatically:
+     - Create business rules in ServiceNow to detect incident changes
+     - Configure outbound REST messages to send data to the API Gateway
+     - Set up the webhook URL in ServiceNow
+
+4. **Verify the Setup**:
+   - Check CloudFormation outputs for the webhook URL
+   - Verify in ServiceNow that the business rules and outbound REST messages were created
+   - The business rules will be prefixed with the Lambda function name for easy identification
+
+5. **Test the Integration**:
+   - Create a test incident in ServiceNow
+   - Verify that the incident appears in AWS Security Incident Response
+   - Update the incident in AWS and verify the changes appear in ServiceNow
 
 ## Security Considerations
 

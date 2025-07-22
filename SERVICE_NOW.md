@@ -2,6 +2,20 @@
 
 This document provides an overview of the AWS Security Incident Response ServiceNow integration, including its architecture, resources, parameters, and outputs.
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Prerequisites](#prerequisites)
+- [Parameters](#parameters)
+- [Post Deployment](#post-deployment)
+- [Architecture](#architecture)
+  - [Integration Overview](#integration-overview)
+  - [Integration Flow](#integration-flow)
+- [Resources](#resources)
+  - [AWS Resources](#aws-resources)
+  - [ServiceNow Resources](#servicenow-resources)
+- [Troubleshooting and Validation](SERVICE_NOW_TROUBLESHOOTING.md)
+
 ## Quick Start
 
 ```bash
@@ -13,20 +27,56 @@ deploy-integrations-solution service-now \
   --log-level info
 ```
 
-After deployment, create a test incident in ServiceNow and verify it appears in AWS Security Incident Response.
+## Prerequisites
 
-## Table of Contents
+### Identify Your ServiceNow Instance ID
 
-- [Architecture](#architecture)
-- [Resources](#resources)
-  - [AWS Resources](#aws-resources)
-  - [ServiceNow Resources](#servicenow-resources)
-- [Parameters](#parameters)
-  - [Preparing for Deployment](#preparing-for-deployment)
-- [Setup and Configuration](#setup-and-configuration)
-  - [Deployment Steps](#deployment-steps)
-- [Troubleshooting and Validation](SERVICE_NOW_TROUBLESHOOTING.md)
-- [Related Resources](#related-resources)
+1. Open your ServiceNow instance in a web browser
+2. Look at the URL in your browser's address bar
+3. The instance ID is the subdomain part of the URL
+
+**Example:**
+- URL: `https://dev12345.service-now.com`
+- Instance ID: `dev12345`
+
+### Create a ServiceNow Integration User
+
+1. Log in to your ServiceNow instance as an administrator
+2. Navigate to User Administration > Users
+3. Click "New" to create a new user
+4. Fill in the required fields:
+   - User ID: `aws_integration` (recommended)
+   - First Name: `AWS`
+   - Last Name: `Integration`
+   - Password: Create a secure password
+5. Assign the following roles:
+   - `admin` (or a custom role with permissions to create business rules)
+   - `incident_manager`
+
+**Best Practice:** Create a dedicated service account rather than using a personal account.
+
+### Secure Your Credentials (Optional)
+
+1. Store your ServiceNow credentials securely
+2. For production environments, consider using:
+   - AWS Secrets Manager
+   - ServiceNow API keys instead of passwords
+3. Rotate credentials regularly according to your security policies
+
+## Parameters
+
+The ServiceNow integration stack requires the following parameters during deployment:
+
+| Parameter | Description | Type | Required | Example |
+|-----------|-------------|------|----------|--------|
+| `serviceNowInstanceId` | The ServiceNow instance ID (subdomain of your ServiceNow URL) | String | Yes | `dev12345` (from dev12345.service-now.com) |
+| `serviceNowUser` | The username for ServiceNow API access (must have admin privileges to create business rules) | String | Yes | `admin` or `integration_user` |
+| `serviceNowPassword` | The password for ServiceNow API access | String | Yes | `********` |
+| `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
+
+## Post Deployment
+
+Create a test Case in AWS Security Incident Response and verify it appears as Incident in Service Now
 
 ## Architecture
 
@@ -170,53 +220,6 @@ The ServiceNow Resource Setup Lambda creates the following components in your Se
 
 All these components work together to ensure real-time synchronization between ServiceNow incidents and AWS Security Incident Response cases.
 
-## Parameters
-
-The ServiceNow integration stack requires the following parameters during deployment:
-
-| Parameter | Description | Type | Required | Example |
-|-----------|-------------|------|----------|--------|
-| `serviceNowInstanceId` | The ServiceNow instance ID (subdomain of your ServiceNow URL) | String | Yes | `dev12345` (from dev12345.service-now.com) |
-| `serviceNowUser` | The username for ServiceNow API access (must have admin privileges to create business rules) | String | Yes | `admin` or `integration_user` |
-| `serviceNowPassword` | The password for ServiceNow API access | String | Yes | `********` |
-| `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
-
-### Preparing for Deployment
-
-#### Step 1: Identify Your ServiceNow Instance ID
-
-1. Open your ServiceNow instance in a web browser
-2. Look at the URL in your browser's address bar
-3. The instance ID is the subdomain part of the URL
-
-**Example:**
-- URL: `https://dev12345.service-now.com`
-- Instance ID: `dev12345`
-
-#### Step 2: Create a ServiceNow Integration User
-
-1. Log in to your ServiceNow instance as an administrator
-2. Navigate to User Administration > Users
-3. Click "New" to create a new user
-4. Fill in the required fields:
-   - User ID: `aws_integration` (recommended)
-   - First Name: `AWS`
-   - Last Name: `Integration`
-   - Password: Create a secure password
-5. Assign the following roles:
-   - `admin` (or a custom role with permissions to create business rules)
-   - `incident_manager`
-
-**Best Practice:** Create a dedicated service account rather than using a personal account.
-
-#### Step 3: Secure Your Credentials
-
-1. Store your ServiceNow credentials securely
-2. For production environments, consider using:
-   - AWS Secrets Manager
-   - ServiceNow API keys instead of passwords
-3. Rotate credentials regularly according to your security policies
-
 ## Outputs
 
 The stack provides the following outputs that can be used for integration:
@@ -226,9 +229,7 @@ The stack provides the following outputs that can be used for integration:
 | `ServiceNowClientLambdaArn` | ARN of the ServiceNow Client Lambda function | Reference for other AWS resources |
 | `ServiceNowWebhookUrl` | URL of the API Gateway webhook endpoint | Configure in ServiceNow to send events to AWS |
 
-## Setup and Configuration
-
-### Deployment Steps
+## Setup and Configuration Summary
 
 1. **Prepare ServiceNow**:
    - Ensure you have a ServiceNow instance with admin access

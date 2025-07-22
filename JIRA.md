@@ -2,6 +2,21 @@
 
 This document provides an overview of the AWS Security Incident Response Jira integration, including its architecture, resources, parameters, and outputs.
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Prerequisites](#prerequisites)
+- [Parameters](#parameters)
+- [Post Deployment](#post-deployment)
+- [Architecture](#architecture)
+- [Resources](#resources)
+  - [AWS Resources](#aws-resources)
+  - [Jira Resources](#jira-resources)
+- [Setup and Configuration](#setup-and-configuration)
+- [Troubleshooting and Validation](JIRA_TROUBLESHOOTING.md)
+- [Frequently Asked Questions](#frequently-asked-questions)
+- [Related Resources](#related-resources)
+
 ## Quick Start
 
 ```bash
@@ -10,24 +25,76 @@ deploy-integrations-solution jira \
   --email <your-jira-email> \
   --url <your-jira-url> \
   --token <your-jira-api-token> \
+  --project-key <your-jira-project-key> \
   --log-level {info, debug, error}
 ```
 
-After deployment, create a test case in AWS Security Incident Response and verify it appears in Jira.
+See [Prerequisites](#prerequisites) section below for instructions on how to obtain your Jira email, URL, and API token.
 
-## Table of Contents
+## Prerequisites
 
-- [Architecture](#architecture)
-- [Resources](#resources)
-  - [AWS Resources](#aws-resources)
-  - [Jira Resources](#jira-resources)
-- [Parameters](#parameters)
-  - [Preparing for Deployment](#preparing-for-deployment)
-- [Setup and Configuration](#setup-and-configuration)
-  - [Deployment Steps](#deployment-steps)
-- [Troubleshooting and Validation](JIRA_TROUBLESHOOTING.md)
-- [Frequently Asked Questions](#frequently-asked-questions)
-- [Related Resources](#related-resources)
+### Getting Your Jira Email
+
+1. Log in to your Atlassian account
+2. Click on your profile picture in the top-right corner
+3. Select "Account settings"
+4. Your email address is displayed in the profile section
+5. Use this email address for the `--email` parameter
+
+### Finding Your Jira URL
+
+1. Log in to your Jira instance
+2. The URL in your browser's address bar is your Jira URL
+3. For Jira Cloud, it typically looks like `https://your-company.atlassian.net`
+4. Use this URL for the `--url` parameter
+
+### Creating a Jira API Token
+
+1. Log in to your Atlassian account at https://id.atlassian.com/manage-profile/security/api-tokens
+2. Click "Create API token"
+3. Enter a label for your token (e.g., "AWS Security IR Integration")
+4. Click "Create"
+5. Copy the generated token (you won't be able to see it again)
+6. Use this token for the `--token` parameter
+
+### Identifying Your Jira Project Key
+
+1. Log in to your Jira instance
+2. Navigate to the project you want to use for security incidents
+3. The project key is typically displayed in the URL and in the project header
+4. For example, in the URL `https://your-company.atlassian.net/browse/SEC-123`, the project key is `SEC`
+5. Use this project key for the `--project-key` parameter
+
+### Set Up Your Jira Project (only if you do not have a project already)
+
+1. Create a dedicated project for security incidents if you don't have one
+2. Note the project key (e.g., "SEC" or "SECURITY")
+3. Ensure you have appropriate permissions in this project
+
+## Parameters
+
+The Jira integration stack requires the following parameters during deployment:
+
+| Parameter | Description | Type | Required | Example |
+|-----------|-------------|------|----------|---------|
+| `jiraEmail` | The email address associated with your Jira account | String | Yes | `user@example.com` |
+| `jiraUrl` | The URL of your Jira instance | String | Yes | `https://your-company.atlassian.net` |
+| `jiraToken` | The API token for Jira API access | String | Yes | `********` |
+| `jiraProjectKey` | The key of the Jira project where issues will be created | String | Yes | `SEC` |
+| `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
+
+## Post Deployment
+
+### Configure Jira Automation (Required)
+
+1. In your Jira project, go to Project settings > Automation
+2. Create rules to send events to AWS when issues are created, updated, or deleted
+3. Use the AWS SNS trigger in Jira automation
+4. Configure the SNS topic ARN (this will be available after deployment)
+
+### Perform a basic test (Optional)
+
+Create a test Case in AWS Security Incident Response and verify it appears in Jira.
 
 ## Architecture
 
@@ -139,80 +206,9 @@ To use this integration, you'll need to configure the following in your Jira ins
    - The integration creates issues with the "Task" issue type by default
    - This is configured as a constant in the integration code
 
-## Parameters
-
-The Jira integration stack requires the following parameters during deployment:
-
-| Parameter | Description | Type | Required | Example |
-|-----------|-------------|------|----------|---------|
-| `jiraEmail` | The email address associated with your Jira account | String | Yes | `user@example.com` |
-| `jiraUrl` | The URL of your Jira instance | String | Yes | `https://your-company.atlassian.net` |
-| `jiraToken` | The API token for Jira API access | String | Yes | `********` |
-| `jiraProjectKey` | The key of the Jira project where issues will be created | String | Yes | `SEC` |
-| `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
-
-### Preparing for Deployment
-
-#### Step 1: Create a Jira API Token
-
-1. Log in to your Atlassian account at https://id.atlassian.com/manage-profile/security/api-tokens
-2. Click "Create API token"
-3. Enter a label for your token (e.g., "AWS Security IR Integration")
-4. Click "Create"
-5. Copy the generated token (you won't be able to see it again)
-
-#### Step 2: Identify Your Jira URL
-
-1. Log in to your Jira instance
-2. The URL in your browser's address bar is your Jira URL
-3. For Jira Cloud, it typically looks like `https://your-company.atlassian.net`
-
-#### Step 3: Set Up Your Jira Project
-
-1. Create a dedicated project for security incidents if you don't have one
-2. Note the project key (e.g., "SEC" or "SECURITY")
-3. Ensure you have appropriate permissions in this project
-
-#### Step 4: Configure Jira Automation
-
-1. In your Jira project, go to Project settings > Automation
-2. Create rules to send events to AWS when issues are created, updated, or deleted
-3. Use the AWS SNS trigger in Jira automation
-4. Configure the SNS topic ARN (this will be available after deployment)
-
 ## Setup and Configuration
 
-### Deployment Steps
-
-1. **Prepare Jira**:
-   - Create an API token as described above
-   - Identify your Jira URL and project key
-
-2. **Deploy the Stack**:
-   ```bash
-   # Using the deploy-integrations-solution script
-   deploy-integrations-solution jira \
-     --email <your-jira-email> \
-     --url <your-jira-url> \
-     --token <your-jira-api-token> \
-     --project-key <your-jira-project-key> \
-     --log-level {info, debug, error}
-   ```
-   
-   Note: The `--log-level` parameter is optional and defaults to `error`. Valid values are `info`, `debug`, and `error`.
-
-3. **Configure Jira Automation**:
-   - Use the SNS topic ARN from the CloudFormation outputs
-   - Set up automation rules in Jira to send events to the SNS topic
-
-4. **Verify the Setup**:
-   - Check CloudFormation outputs for the Lambda ARNs and log group URLs
-   - Create a test case in AWS Security Incident Response
-   - Verify that an issue is created in your Jira project
-
-5. **Test the Integration**:
-   - Update the issue in Jira and verify the changes appear in AWS Security Incident Response
-   - Update the case in AWS Security Incident Response and verify the changes appear in Jira
+For detailed information on setup, configuration, and deployment steps, please refer to the [Jira Troubleshooting Guide](JIRA_TROUBLESHOOTING.md).
 
 ## Troubleshooting and Validation
 

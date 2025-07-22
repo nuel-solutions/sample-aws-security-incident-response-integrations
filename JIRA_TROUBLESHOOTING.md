@@ -1,9 +1,10 @@
 # AWS Security Incident Response Jira Integration - Troubleshooting Guide
 
-This document provides detailed information on troubleshooting, validation, and security considerations for the AWS Security Incident Response Jira integration.
+This document provides detailed information on setup, configuration, validation, troubleshooting, and security considerations for the AWS Security Incident Response Jira integration.
 
 ## Table of Contents
 
+- [Setup and Configuration](#setup-and-configuration)
 - [Outputs and Validation](#outputs-and-validation)
   - [Using CloudFormation Outputs](#using-cloudformation-outputs)
   - [Validating Jira Configuration](#validating-jira-configuration)
@@ -11,6 +12,40 @@ This document provides detailed information on troubleshooting, validation, and 
   - [Common Issues and Solutions](#common-issues-and-solutions)
   - [Diagnostic Steps](#diagnostic-steps)
 - [Security Considerations](#security-considerations)
+
+## Setup and Configuration
+
+### Deployment Steps Summary
+
+1. **Prepare Jira**:
+   - Create an API token as described in the Prerequisites section
+   - Identify your Jira URL and project key
+
+2. **Deploy the Stack**:
+   ```bash
+   # Using the deploy-integrations-solution script
+   deploy-integrations-solution jira \
+     --email <your-jira-email> \
+     --url <your-jira-url> \
+     --token <your-jira-api-token> \
+     --project-key <your-jira-project-key> \
+     --log-level {info, debug, error}
+   ```
+   
+   Note: The `--log-level` parameter is optional and defaults to `error`. Valid values are `info`, `debug`, and `error`.
+
+3. **Configure Jira Automation**:
+   - Use the SNS topic ARN from the CloudFormation outputs
+   - Set up automation rules in Jira to send events to the SNS topic
+
+4. **Verify the Setup**:
+   - Check CloudFormation outputs for the Lambda ARNs and log group URLs
+   - Create a test case in AWS Security Incident Response
+   - Verify that an issue is created in your Jira project
+
+5. **Test the Integration**:
+   - Update the issue in Jira and verify the changes appear in AWS Security Incident Response
+   - Update the case in AWS Security Incident Response and verify the changes appear in Jira
 
 ## Outputs and Validation
 
