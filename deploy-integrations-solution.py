@@ -9,7 +9,7 @@ def deploy_jira(args):
     try:
         cmd = [
             "npx", "cdk", "deploy",
-            "--app", "python app_jira.py",
+            "--app", "python app.py",
             "AwsSecurityIncidentResponseSampleIntegrationsCommonStack",
             "AwsSecurityIncidentResponseJiraIntegrationStack",
             "--parameters", f"AwsSecurityIncidentResponseSampleIntegrationsCommonStack:logLevel={args.log_level}",
