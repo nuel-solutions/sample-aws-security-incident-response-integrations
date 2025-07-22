@@ -47,7 +47,7 @@ try:
     from jira_wrapper import JiraClient
 except ImportError:
     # This import works for local development and imports locally from the file system
-    from ..mappers.python.jira_sir_mapper import Case, create_case_from_api_response
+    from ..mappers.python.jira_sir_mapper import Case, create_case_from_api_response, map_fields_to_jira, map_case_status
     from ..wrappers.python.jira_wrapper import JiraClient
 
 
@@ -326,6 +326,7 @@ class IncidentService:
         ir_case_arn = ir_case_detail["caseArn"]
 
         try:
+            # TODO: update the following to retrieve GUID from ARN when the service starts using GUIDs
             ir_case_id = re.search(r"/(\d+)$", ir_case_arn).group(1)
         except (AttributeError, IndexError):
             logger.error(f"Failed to extract case ID from ARN: {ir_case_arn}")
@@ -335,16 +336,15 @@ class IncidentService:
 
         return ir_case_detail, ir_event_type, ir_case_id, sir_case_status
 
-    def prepare_jira_fields(
-        self, ir_case_detail: Dict[str, Any], ir_case_id: str
-    ) -> Dict[str, Any]:
+    def map_sir_fields_to_jira_(self, ir_case_detail: Dict[str, Any], ir_case_id: str, jira_project_key: str, jira_issue_type: str) -> Dict[str, Any]:
         """
         Prepare Jira fields from IR case details
 
         Args:
             ir_case_detail: IR case details
             ir_case_id: IR case ID
-
+            jira_project_key: Jira project key
+            jira_issue_type: Jira issue type
         Returns:
             Dictionary of Jira fields
         """
@@ -355,11 +355,10 @@ class IncidentService:
         jira_fields["summary"] = (
             f"{ir_case_detail.get('title', 'Security IR Case')} - AWS Security Incident Response Case#{ir_case_id}"
         )
-
-        # Add project and issue type if not present in mapped fields
-        jira_fields["project"] = {"key": "EP"}  # Set your project key
-        jira_fields["issuetype"] = {"name": "Task"}
-
+        
+        jira_fields["project"] = {"key": jira_project_key}  # Set project key
+        jira_fields["issuetype"] = {"name": jira_issue_type} # Set issue type
+       
         return jira_fields
 
     def handle_case_creation(
@@ -508,7 +507,7 @@ class IncidentService:
         except Exception as e:
             logger.error(f"Error processing incident details: {e}")
 
-    def create_or_update_issue(self, ir_case: Dict[str, Any]) -> Optional[str]:
+    def create_or_update_issue(self, ir_case: Dict[str, Any], jira_project_key, jira_issue_type) -> Optional[str]:
         """
         Create or update a Jira issue based on an IR case
 
@@ -530,8 +529,8 @@ class IncidentService:
                 return None
 
             # Prepare Jira fields
-            jira_fields = self.prepare_jira_fields(ir_case_detail, ir_case_id)
-
+            jira_fields = self.map_sir_fields_to_jira_(ir_case_detail, ir_case_id, jira_project_key, jira_issue_type)
+            
             # Get status mapping
             jira_status = None
             status_comment = None
@@ -664,11 +663,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         Dictionary containing response status and details
     """
     try:
+
+        EVENT_SOURCE = os.environ.get('EVENT_SOURCE', 'security-ir')
+        JIRA_PROJECT_KEY = os.environ.get('JIRA_PROJECT_KEY')
+        JIRA_ISSUE_TYPE = os.environ.get('JIRA_ISSUE_TYPE', 'Task')
+        
         # Only process events from Security Incident Response
-        EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "security-ir")
         if event.get("source") == EVENT_SOURCE:
             incident_service = IncidentService()
-            incident_service.create_or_update_issue(event)
+            incident_service.create_or_update_issue(event, JIRA_PROJECT_KEY, JIRA_ISSUE_TYPE)
         else:
             logger.info(
                 "Jira Client lambda will skip processing of this event as the event source is not security-ir"

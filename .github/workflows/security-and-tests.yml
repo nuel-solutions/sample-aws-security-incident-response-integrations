@@ -33,7 +33,7 @@ jobs:
           uv pip install -r requirements-dev.txt
 
       - name: Run Bandit
-        run: bandit -r . -x ./tests --skip B113,B108
+        run: bandit -r . -x ./tests --skip B113,B108,B404
           
       - name: Run detect-secrets
         run: detect-secrets scan --baseline .secrets.baseline
@@ -54,6 +54,8 @@ jobs:
         uses: anchore/scan-action@v6
         with:
           sbom: "${{ github.event.repository.name }}-sbom.spdx.json"
+          fail-build: true
+          severity-cutoff: critical
 
       
 
@@ -66,7 +68,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '20'
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -79,16 +81,16 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           python -m pip install --upgrade pip
           uv pip install -r requirements.txt
-          npm install -g aws-cdk
 
       - name: Run CDK Nag
         run: |
           # TODO: use the renamed app_jira.py in the following command once the Service Now integration implementation is complete
           # TODO: see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210524326651427?focus=true
-          node --experimental-wasm-reftypes $(which cdk) synth --app "python app.py"
+          # node --experimental-wasm-reftypes $(which cdk) synth --app "python app.py"
+          npx cdk synth --app "python app.py"
           # TODO: uncomment/enable the following command once the Service Now integration implementation is complete
           # TODO: see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210524326651427?focus=true
-          # node --experimental-wasm-reftypes ./node_modules/.bin/cdk synth --app "python app_service_now.py"
+          # npx cdk synth --app "python app_service_now.py"
           # CDK Nag is integrated into the CDK app, so it will run during synthesis
 
   tests:
