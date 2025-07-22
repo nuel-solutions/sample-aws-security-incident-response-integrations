@@ -1,9 +1,117 @@
 # AWS Security Incident Response Sample Integrations
 
-This project provides sample integrations for AWS Security Incident Response, enabling customers to seamlessly integrate the service with their existing applications for incident response, stakeholder notifications, and case management.
+This project provides sample integrations for AWS Security Incident Response, enabling customers to seamlessly integrate the service with their existing applications for incident response, stakeholder notifications, and case management. Currently, the solution provides integration with the following applications:
 
 [![Jira Integration](https://img.shields.io/badge/Integration-Jira-0052CC)](JIRA.md)
+```bash
+deploy-integrations-solution jira \
+  --email <your-jira-email> \
+  --url <your-jira-url> \
+  --token <your-jira-api-token> \
+  --project-key <your-jira-project-key> \
+  --log-level info
+```
+
 [![ServiceNow Integration](https://img.shields.io/badge/Integration-ServiceNow-81B5A1)](SERVICE_NOW.md)
+```bash
+deploy-integrations-solution service-now \
+  --instance-id <your-servicenow-instance-id> \
+  --username <your-servicenow-username> \
+  --password <your-servicenow-password> \
+  --log-level info
+```
+
+**Note: Follow the steps in Getting Started section below to perform the above deployments**
+
+## Getting Started
+
+### Prerequisites
+
+- **AWS Account** with permissions to create the required resources
+- **AWS CDK** v2.x installed (`npm install -g aws-cdk`)
+- **Python 3.9+** installed
+- **AWS CLI** configured with appropriate permissions
+- **Jira Cloud** account (for Jira integration)
+- **ServiceNow** instance with admin access (for ServiceNow integration)
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies
+   ```
+   pip install -r requirements.txt
+   ```
+3. Install development dependencies (optional):
+   ```
+   pip install -r requirements-dev.txt
+   ```
+
+### Deployment
+
+For deployment of an integration pattern, install and use the `deploy-integrations-solution` supplementary python app
+in the command-line using the following steps:
+
+1. Add the `deploy-integrations-solution.py` script to the `bin` path using the following commands:
+   ```
+   sudo cp deploy-integrations-solution.py /usr/local/bin/deploy-integrations-solution
+   ```
+   ```
+   sudo chmod +x /usr/local/bin/deploy-integrations-solution
+   ```
+
+2. Verify if the `deploy-integrations-solution` works in the command-line by running:
+   ```
+   deploy-integrations-solution --help
+   ```
+   You should see the following output:
+   ```
+   usage: deploy-integrations-solution [-h] [--log-level {info,debug,error}] {jira,service-now} ...
+
+   Deploy AWS Security Incident Response Sample Integrations
+
+   positional arguments:
+   {jira,service-now}    Integration type
+      jira                Deploy Jira integration
+      service-now         Deploy ServiceNow integration
+
+   options:
+   -h, --help            show this help message and exit
+   ```
+3. Use the `jira` argument to deploy the JIRA integration:
+   `deploy-integrations-solution jira -h`
+   You should see the following output:
+   ```
+   usage: deploy-integrations-solution jira [-h] --email EMAIL --url URL --token TOKEN
+
+   options:
+      -h, --help     show this help message and exit
+      --email EMAIL  Jira email
+      --url URL      Jira URL
+      --token TOKEN  Jira API token
+      --project-key  Jira Project key
+      --log-level    {info,debug,error} Log level for Lambda functions
+   ```
+   Provide the respective parameters for each of the above arguments to perform a deploy:
+   `deploy-integrations-solution jira --email <email> --url <url> --token <token>`
+4. Use the `service-now` argument to deploy the ServiceNow integration:
+   `deploy-integrations-solution service-now -h`
+   You should see the following output:
+   ```
+   usage: deploy-integrations-solution service-now [-h] --instance-id INSTANCE --username USERNAME --password PASSWORD
+
+   options:
+      -h, --help           show this help message and exit
+      --instance-id INSTANCE ServiceNow instance ID
+      --username USERNAME  ServiceNow username
+      --password PASSWORD  ServiceNow password
+      --log-level    {info,debug,error} Log level for Lambda functions
+   ```
+   Provide the respective parameters for each of the above arguments to perform a deploy:
+   `deploy-integrations-solution service-now --instance <instance> --username <username> --password <password>`
+5. Use the `--log-level` to set the value as `info`, `debug`, `error`. The default log-level is set to `error`
+6. Alternatively, if you are not able to add the `deploy-integrations-solution.py` script to the `bin` path, you can
+   use the script directly by replacing `deploy-integrations-solution` in the above examples with
+   `./deploy-integrations-solution.py` command.
 
 ## Overview
 
@@ -40,169 +148,18 @@ This repository contains:
 
 The solution leverages the following AWS services:
 
-- **Amazon EventBridge**: Central event bus for routing events between systems
-- **AWS Lambda**: Serverless compute for processing events and API calls
-- **Amazon Simple Notification Service (SNS)**: Messaging service for receiving events from external systems
+- **Amazon EventBridge**: Custom event bus named "security-incident-event-bus" for routing events between systems
+- **AWS Lambda**: Serverless compute for processing events and API calls, including a Security IR Poller that runs every minute
+- **Amazon Simple Notification Service (SNS)**: Messaging service for receiving events from Jira
 - **Amazon API Gateway**: Webhook endpoint for receiving events from ServiceNow
 - **Amazon Simple Queue Service (SQS)**: Dead-letter queue for handling failed events
-- **Amazon DynamoDB**: NoSQL database for storing mapping information between systems
-- **Amazon CloudWatch**: Monitoring, logging, and alerting
+- **Amazon DynamoDB**: NoSQL database table with partition key "PK" and sort key "SK" for storing mapping information
+- **Amazon CloudWatch**: Monitoring, logging (with one-week retention), and alerting
 - **AWS Systems Manager Parameter Store**: Secure storage for credentials and configuration
+- **AWS Lambda Layers**: Shared code layers for domain models, mappers, and wrappers
 - **AWS Security Incident Response (SIR)**: Core security incident response service
 
-### JIRA Integration Flow
 
-There are two bidirectional flows in the integration between Jira and AWS Security Incident Response (SIR).
-
-#### Flow 1: AWS Security Incident Response to Jira
-
-1. The **Security IR Poller Lambda** periodically polls for incidents generated by SIR
-2. It stores the incident details in DynamoDB and publishes Create, Update, or Delete events to EventBridge
-3. The **Jira Client Lambda** subscribes to these EventBridge events
-4. It gets or compares the incident details, updates the Jira issue ID, and performs the appropriate action in Jira (Create, Update, or Delete Jira issues)
-
-#### Flow 2: Jira to AWS Security Incident Response
-
-1. Jira publishes Create, Update, or Delete events of issues to the **Jira SNS Topic** via Jira Automation
-2. The **Jira Notification Handler Lambda** subscribes to the SNS Topic and processes these events
-3. It publishes the events to EventBridge
-4. The **Security IR Client Lambda** subscribes to the Jira issue events and performs the appropriate operation (Create, Update, or Delete) on SIR
-
-For detailed information about the Jira integration, including setup instructions, configuration details, and troubleshooting tips, see the [Jira Integration Documentation](JIRA.md).
-
-### ServiceNow Integration Flow
-
-The ServiceNow integration follows a similar pattern to the Jira integration, but with some key differences in implementation:
-
-#### Flow 1: ServiceNow to AWS Security Incident Response
-
-1. ServiceNow incidents trigger a **Business Rule** when created, updated, or closed
-2. The Business Rule sends the incident data to an **API Gateway webhook endpoint**
-3. The **ServiceNow Notifications Handler Lambda** processes the webhook request and publishes events to EventBridge
-4. The **Security IR Client Lambda** subscribes to these events and performs the appropriate operations in AWS Security Incident Response
-
-#### Flow 2: AWS Security Incident Response to ServiceNow
-
-1. The **Security IR Poller Lambda** polls for incidents from AWS Security Incident Response
-2. Events are published to EventBridge
-3. The **ServiceNow Client Lambda** processes these events
-4. The ServiceNow Client Lambda updates or creates incidents in ServiceNow via the ServiceNow API
-
-#### Automatic ServiceNow Setup
-
-The integration includes a **ServiceNow Resource Setup Lambda** that automatically configures the necessary components in ServiceNow during deployment:
-- Business Rules for incident events
-- Outbound REST Messages for API communication
-- Script Includes for data formatting
-
-For detailed information about the ServiceNow integration, including setup instructions, configuration details, and troubleshooting tips, see the [ServiceNow Integration Documentation](SERVICE_NOW.md).
-
-#### Error Handling
-
-To avoid losing events after they fail to be delivered to EventBridge, we have configured a dead-letter queue (DLQ) and send all failed events to it for processing later. See the [Troubleshooting](#troubleshooting) section for more information.
-
-## Getting Started
-
-### Prerequisites
-
-- **AWS Account** with permissions to create the required resources
-- **AWS CDK** v2.x installed (`npm install -g aws-cdk`)
-- **Python 3.9+** installed
-- **AWS CLI** configured with appropriate permissions
-- **Jira Cloud** account (for Jira integration)
-- **ServiceNow** instance with admin access (for ServiceNow integration)
-
-### Quick Start
-
-```bash
-# For Jira integration
-deploy-integrations-solution jira \
-  --email <your-jira-email> \
-  --url <your-jira-url> \
-  --token <your-jira-api-token>
-
-# For ServiceNow integration
-deploy-integrations-solution service-now \
-  --instance <your-servicenow-instance-id> \
-  --username <your-servicenow-username> \
-  --password <your-servicenow-password>
-```
-
-For detailed setup instructions, see the [Jira Integration Documentation](JIRA.md) or [ServiceNow Integration Documentation](SERVICE_NOW.md).
-
-### Installation
-
-1. Clone the repository
-2. Install dependencies
-   ```
-   pip install -r requirements.txt
-   ```
-3. Install development dependencies (optional):
-   ```
-   pip install -r requirements-dev.txt
-   ```
-
-### Deployment
-
-For deployment of an integration pattern, install and use the `deploy-integrations-solution` supplementary python app
-in the command-line using the following steps:
-
-1. Add the `deploy-integrations-solution.py` script to the `bin` path:
-   ```
-   sudo cp deploy-integrations-solution.py /usr/local/bin/deploy-integrations-solution\nsudo chmod +x /usr/local/bin/deploy-integrations-solution\n
-   ```
-2. Verify if the `deploy-integrations-solution` works in the command-line by running:
-   ```
-   deploy-integrations-solution --help
-   ```
-   You should see the following output:
-   ```
-   usage: deploy-integrations-solution [-h] [--log-level {info,debug,error}] {jira,service-now} ...
-
-   Deploy AWS Security Incident Response Sample Integrations
-
-   positional arguments:
-   {jira,service-now}    Integration type
-      jira                Deploy Jira integration
-      service-now         Deploy ServiceNow integration
-
-   options:
-   -h, --help            show this help message and exit
-   --log-level {info,debug,error}
-                           Log level for Lambda functions
-   ```
-3. Use the `jira` argument to deploy the JIRA integration:
-   `deploy-integrations-solution jira -h`
-   You should see the following output:
-   ```
-   usage: deploy-integrations-solution jira [-h] --email EMAIL --url URL --token TOKEN
-
-   options:
-      -h, --help     show this help message and exit
-      --email EMAIL  Jira email
-      --url URL      Jira URL
-      --token TOKEN  Jira API token
-   ```
-   Provide the respective parameters for each of the above arguments to perform a deploy:
-   `deploy-integrations-solution jira --email <email> --url <url> --token <token>`
-4. Use the `service-now` argument to deploy the ServiceNow integration:
-   `deploy-integrations-solution service-now -h`
-   You should see the following output:
-   ```
-   usage: deploy-integrations-solution service-now [-h] --instance INSTANCE --username USERNAME --password PASSWORD
-
-   options:
-      -h, --help           show this help message and exit
-      --instance INSTANCE  ServiceNow instance ID
-      --username USERNAME  ServiceNow username
-      --password PASSWORD  ServiceNow password
-   ```
-   Provide the respective parameters for each of the above arguments to perform a deploy:
-   `deploy-integrations-solution service-now --instance <instance> --username <username> --password <password>`
-5. Use the `--log-level` to set the value as `info`, `debug`, `error`. The default log-level is set to `error`
-6. Alternatively, if you are not able to add the `deploy-integrations-solution.py` script to the `bin` path, you can
-   use the script directly by replacing `deploy-integrations-solution` in the above examples with
-   `./deploy-integrations-solution.py` command.
 
 ## Usage
 

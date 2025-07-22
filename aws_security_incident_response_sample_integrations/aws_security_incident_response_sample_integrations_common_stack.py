@@ -220,7 +220,8 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             environment={
                 "JIRA_EVENT_SOURCE": JIRA_EVENT_SOURCE,
                 # Add ServiceNow event source
-                "INCIDENTS_TABLE_NAME": self.table.table_name
+                "INCIDENTS_TABLE_NAME": self.table.table_name,
+                "LOG_LEVEL": self.log_level_param.value_as_string
             },
             role=security_ir_client_role
         )
