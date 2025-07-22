@@ -366,6 +366,8 @@ class IncidentService:
         ir_case_detail: Dict[str, Any],
         ir_case_id: str,
         jira_fields: Dict[str, Any],
+        jira_status: Optional[str],
+        status_comment: Optional[str],
     ) -> Optional[str]:
         """
         Handle the creation of a new IR case
@@ -374,6 +376,8 @@ class IncidentService:
             ir_case_detail: IR case details
             ir_case_id: IR case ID
             jira_fields: Jira fields
+            jira_status: Optional[str],
+            status_comment: Optional[str],
 
         Returns:
             Jira issue ID or None if creation fails
@@ -382,8 +386,13 @@ class IncidentService:
         jira_issue = self.jira_client.create_issue(jira_fields)
         if not jira_issue:
             return None
-
+        
         jira_issue_id = jira_issue.key
+        
+        # Update status as needed
+        if jira_status:
+            self.jira_client.update_status(jira_issue_id, jira_status, status_comment)
+        
         self.db_service.update_mapping(ir_case_id, jira_issue_id)
 
         # Handle watchers if present
@@ -434,7 +443,7 @@ class IncidentService:
             logger.info(
                 f"No Jira issue found for IR case {ir_case_id} in database, creating Jira issue..."
             )
-            return self.handle_case_creation(ir_case_detail, ir_case_id, jira_fields)
+            return self.handle_case_creation(ir_case_detail, ir_case_id, jira_fields, jira_status, status_comment)
 
         # Update existing issue
         self.jira_client.update_issue(jira_issue_id, jira_fields)
@@ -540,7 +549,7 @@ class IncidentService:
             # Handle based on event type
             if ir_event_type == "CaseCreated":
                 return self.handle_case_creation(
-                    ir_case_detail, ir_case_id, jira_fields
+                    ir_case_detail, ir_case_id, jira_fields, jira_status, status_comment
                 )
             elif ir_event_type == "CaseUpdated":
                 return self.handle_case_update(
@@ -665,8 +674,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
 
         EVENT_SOURCE = os.environ.get('EVENT_SOURCE', 'security-ir')
-        JIRA_PROJECT_KEY = os.environ.get('JIRA_PROJECT_KEY')
         JIRA_ISSUE_TYPE = os.environ.get('JIRA_ISSUE_TYPE', 'Task')
+        
+        # Get the Jira project key from SSM parameter store
+        try:
+            ssm_client = boto3.client("ssm")
+            JIRA_PROJECT_KEY = ssm_client.get_parameter(Name=os.environ.get('JIRA_PROJECT_KEY'))["Parameter"]["Value"]
+        except Exception as e:
+            logger.error(f"Error retrieving Jira project key from SSM: {str(e)}")
+            return {
+                "statusCode": 500,
+                "body": json.dumps("Error retrieving Jira project key from SSM"),
+            }
         
         # Only process events from Security Incident Response
         if event.get("source") == EVENT_SOURCE:

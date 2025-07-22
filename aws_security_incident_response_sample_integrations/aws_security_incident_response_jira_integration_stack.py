@@ -15,7 +15,7 @@ from aws_cdk import (
 )
 from cdk_nag import NagSuppressions
 from constructs import Construct
-from .constants import JIRA_AWS_ACCOUNT_ID, JIRA_EVENT_SOURCE, SECURITY_IR_EVENT_SOURCE, JIRA_ISSUE_TYPE
+from .constants import JIRA_AWS_ACCOUNT_ID, JIRA_AUTOMATION_ROLE_ARN, JIRA_EVENT_SOURCE, SECURITY_IR_EVENT_SOURCE, JIRA_ISSUE_TYPE
 from .aws_security_incident_response_sample_integrations_common_stack import AwsSecurityIncidentResponseSampleIntegrationsCommonStack
 
 class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
@@ -183,6 +183,16 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             aws_iam.PolicyStatement(
                 effect=aws_iam.Effect.ALLOW,
                 principals=[aws_iam.AccountPrincipal(JIRA_AWS_ACCOUNT_ID)],
+                actions=["SNS:Publish"],
+                resources=[jira_notifications_topic.topic_arn]
+            )
+        )
+        
+        # Add policy to let Atlassian automation role publish events to SNS topic
+        jira_notifications_topic_policy.document.add_statements(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                principals=[aws_iam.ArnPrincipal(JIRA_AUTOMATION_ROLE_ARN)],
                 actions=["SNS:Publish"],
                 resources=[jira_notifications_topic.topic_arn]
             )
