@@ -142,7 +142,7 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             role=jira_notifications_handler_role
         )
         
-        # Create SNS topic for JIRA notifications
+        # Create SNS topic for JIRA notifications with a permissive policy
         jira_notifications_topic = sns.Topic(
             self,
             "JiraNotificationsTopic",
@@ -156,40 +156,48 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             )
         )
 
-        # Create a topic policy for the JIRA notifications SNS topic
-        # Allow EventBridge to publish to the topic
-        jira_notifications_topic.add_to_resource_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                principals=[aws_iam.ServicePrincipal("events.amazonaws.com")],
-                actions=["sns:Publish"],
-                resources=[jira_notifications_topic.topic_arn],
-                conditions={
-                    "StringEquals": {
-                        "AWS:SourceAccount": self.account
+        # Create a policy document with all required permissions
+        policy_document = aws_iam.PolicyDocument(
+            statements=[
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    principals=[aws_iam.ServicePrincipal("events.amazonaws.com")],
+                    actions=["sns:Publish"],
+                    resources=[jira_notifications_topic.topic_arn],
+                    conditions={
+                        "StringEquals": {
+                            "AWS:SourceAccount": self.account
+                        }
                     }
-                }
-            )
+                ),
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    principals=[aws_iam.AccountPrincipal(JIRA_AWS_ACCOUNT_ID)],
+                    actions=["sns:Publish"],
+                    resources=[jira_notifications_topic.topic_arn]
+                ),
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    principals=[aws_iam.ArnPrincipal(JIRA_AUTOMATION_ROLE_ARN)],
+                    actions=["sns:Publish"],
+                    resources=[jira_notifications_topic.topic_arn]
+                ),
+                # Add a more permissive policy for the specific role
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    principals=[aws_iam.ArnPrincipal("arn:aws:sts::815843069303:assumed-role/atlassian-automation-prod-outgoing/automation-sns-publish-action")],
+                    actions=["sns:Publish"],
+                    resources=["*"]
+                )
+            ]
         )
         
-        # Allow the Jira AWS account to publish to the topic
-        jira_notifications_topic.add_to_resource_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                principals=[aws_iam.AccountPrincipal(JIRA_AWS_ACCOUNT_ID)],
-                actions=["sns:Publish"],
-                resources=[jira_notifications_topic.topic_arn]
-            )
-        )
-        
-        # Allow the specific Atlassian automation role to publish to the topic
-        jira_notifications_topic.add_to_resource_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                principals=[aws_iam.ArnPrincipal(JIRA_AUTOMATION_ROLE_ARN)],
-                actions=["sns:Publish"],
-                resources=[jira_notifications_topic.topic_arn]
-            )
+        # Apply the policy to the topic
+        sns.CfnTopicPolicy(
+            self,
+            "JiraNotificationsTopicPolicy",
+            policy_document=policy_document.to_json(),
+            topics=[jira_notifications_topic.topic_arn]
         )
         
         # Grant the SNS topic permission to invoke the Lambda function
