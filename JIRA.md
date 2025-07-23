@@ -99,9 +99,13 @@ The Jira integration stack requires the following parameters during deployment:
    7. In `Add an action`, select `Send message to Amazon SNS topic`
    8. In `Connect to Amazon SNS`, click on Connect
    9. In the pop-up for `Connect to Amazon SNS`, use the SNS topic ARN that was created for Jira integration from the Cloudformation stack
-   10. Click on `Save`
-   11. Click on `Turn on rule`
-   12. (Optionally) Click on the drop down next to `Turn on rule`, and select `Validation rule` for testing the rule.
+   10. After adding the connection, in the Key-value pairs for the message to be send to SNS on the action execution:
+       1. Enter `IssueId` as the key
+       2. For datatype, select `String` from the dropdown
+       3. Enter `{{issue.key}}` as the value
+   11. Click on `Save`
+   12. Click on `Turn on rule`
+   13. (Optionally) Click on the drop down next to `Turn on rule`, and select `Validation rule` for testing the rule.
 
 ### Perform a basic test (Optional)
 
