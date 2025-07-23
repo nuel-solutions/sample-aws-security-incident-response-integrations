@@ -13,9 +13,11 @@ logger.setLevel(logging.INFO)
 
 # Configuration-based field mappings
 STATUS_MAPPING = {
+    'Acknowledged': 'In Progress',
     'Detection and Analysis': 'In Progress',
     'Containment, Eradication and Recovery': 'In Progress',
-    'Post-Incident Activity': 'In Review',
+    'Post-incident Activities': 'In Review',
+    'Ready to Close': 'In Review',
     'Closed': 'Done'
 }
 
@@ -96,35 +98,36 @@ def map_fields_to_jira(sir_case: Dict[str, Any]) -> Dict[str, Any]:
     
     # Handle special case for description - append unmapped fields
     if 'description' in jira_fields and unmapped_fields:
-        jira_fields['description'] += "\n\n--- Additional AWS Security Incident Response Information ---\n"
-        
-        # Format specific fields with proper capitalization and formatting
-        field_display_names = {
-            'caseArn': 'Case ARN',
-            'incidentStartDate': 'Incident Start Date',
-            'impactedAccounts': 'Impacted Accounts',
-            'impactedRegions': 'Impacted regions',
-            'createdDate': 'Created Date',
-            'lastUpdated': 'Last Updated',
-            # Add other field mappings as needed
-        }
-        
-        # Process fields in a specific order if they exist
-        priority_fields = ['caseArn', 'incidentStartDate', 'impactedAccounts',
-                          'impactedRegions', 'createdDate', 'lastUpdated']
-        
-        # First add priority fields in order
-        for field in priority_fields:
-            if field in unmapped_fields:
-                display_name = field_display_names.get(field, field.capitalize())
-                jira_fields['description'] += f"\n{display_name}: {unmapped_fields[field]}"
-                # Remove from unmapped_fields to avoid duplication
-                del unmapped_fields[field]
-        
-        # Then add any remaining unmapped fields
-        for key, value in unmapped_fields.items():
-            display_name = field_display_names.get(key, key.capitalize())
-            jira_fields['description'] += f"\n{display_name}: {value}"
+        if jira_fields['description'].find("Additional AWS Security Incident Response Information") == -1:
+            jira_fields['description'] += "\n\n--- Additional AWS Security Incident Response Information ---\n"
+            
+            # Format specific fields with proper capitalization and formatting
+            field_display_names = {
+                'caseArn': 'Case ARN',
+                'incidentStartDate': 'Incident Start Date',
+                'impactedAccounts': 'Impacted Accounts',
+                'impactedRegions': 'Impacted regions',
+                'createdDate': 'Created Date',
+                'lastUpdated': 'Last Updated',
+                # Add other field mappings as needed
+            }
+            
+            # Process fields in a specific order if they exist
+            priority_fields = ['caseArn', 'incidentStartDate', 'impactedAccounts',
+                            'impactedRegions', 'createdDate', 'lastUpdated']
+            
+            # First add priority fields in order
+            for field in priority_fields:
+                if field in unmapped_fields:
+                    display_name = field_display_names.get(field, field.capitalize())
+                    jira_fields['description'] += f"\n{display_name}: {unmapped_fields[field]}"
+                    # Remove from unmapped_fields to avoid duplication
+                    del unmapped_fields[field]
+            
+            # Then add any remaining unmapped fields
+            for key, value in unmapped_fields.items():
+                display_name = field_display_names.get(key, key.capitalize())
+                jira_fields['description'] += f"\n{display_name}: {value}"
     
     # Handle closure code if present
     if 'closureCode' in sir_case and sir_case.get('caseStatus') == 'Closed':

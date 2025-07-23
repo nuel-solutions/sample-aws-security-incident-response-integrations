@@ -332,7 +332,7 @@ class IncidentService:
             logger.error(f"Failed to extract case ID from ARN: {ir_case_arn}")
             raise ValueError(f"Invalid case ARN format: {ir_case_arn}")
 
-        sir_case_status = ir_case_detail.get("caseStatus", "")
+        sir_case_status = ir_case_detail.get("caseStatus")
 
         return ir_case_detail, ir_event_type, ir_case_id, sir_case_status
 
@@ -353,7 +353,8 @@ class IncidentService:
 
         # Ensure base fields are set
         jira_fields["summary"] = (
-            f"{ir_case_detail.get('title', 'Security IR Case')} - AWS Security Incident Response Case#{ir_case_id}"
+            # f"{ir_case_detail.get('title', 'Security IR Case')} - AWS Security Incident Response Case#{ir_case_id}"
+            f"{ir_case_detail.get('title', 'Security IR Case')}"
         )
         
         jira_fields["project"] = {"key": jira_project_key}  # Set project key

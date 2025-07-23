@@ -157,14 +157,8 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
         )
 
         # Create a topic policy for the JIRA notifications SNS topic
-        jira_notifications_topic_policy = sns.TopicPolicy(
-            self,
-            "JiraNotificationsTopicPolicy",
-            topics=[jira_notifications_topic],
-        )
-
-        # Add policy statements to the JIRA notifications SNS topic
-        jira_notifications_topic_policy.document.add_statements(
+        # Allow EventBridge to publish to the topic
+        jira_notifications_topic.add_to_resource_policy(
             aws_iam.PolicyStatement(
                 effect=aws_iam.Effect.ALLOW,
                 principals=[aws_iam.ServicePrincipal("events.amazonaws.com")],
@@ -177,23 +171,23 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
                 }
             )
         )
-
-        # Add policy to let JIRA IAM principal publish events to SNS topic
-        jira_notifications_topic_policy.document.add_statements(
+        
+        # Allow the Jira AWS account to publish to the topic
+        jira_notifications_topic.add_to_resource_policy(
             aws_iam.PolicyStatement(
                 effect=aws_iam.Effect.ALLOW,
                 principals=[aws_iam.AccountPrincipal(JIRA_AWS_ACCOUNT_ID)],
-                actions=["SNS:Publish"],
+                actions=["sns:Publish"],
                 resources=[jira_notifications_topic.topic_arn]
             )
         )
         
-        # Add policy to let Atlassian automation role publish events to SNS topic
-        jira_notifications_topic_policy.document.add_statements(
+        # Allow the specific Atlassian automation role to publish to the topic
+        jira_notifications_topic.add_to_resource_policy(
             aws_iam.PolicyStatement(
                 effect=aws_iam.Effect.ALLOW,
                 principals=[aws_iam.ArnPrincipal(JIRA_AUTOMATION_ROLE_ARN)],
-                actions=["SNS:Publish"],
+                actions=["sns:Publish"],
                 resources=[jira_notifications_topic.topic_arn]
             )
         )
