@@ -1,0 +1,148 @@
+name: Prevent Cache Files
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  check-cache-files:
+    runs-on: ubuntu-latest
+    name: Check for Python cache files
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Python cache files
+        uses: pre-commit/action@v3.0.1
+        with:
+          extra_args: --hook-stage manual --all-files
+        env:
+          SKIP: no-commit-to-branch
+
+      - name: Detect Python cache files
+        uses: tj-actions/verify-changed-files@v20
+        id: verify-cache-files
+        with:
+          files: |
+            **/__pycache__/**
+            **/*.pyc
+            **/*.pyo
+            **/*.pyd
+            **/.pytest_cache/**
+            **/.coverage
+            **/.tox/**
+            **/.nox/**
+            **/htmlcov/**
+            **/*.egg-info/**
+          separator: ","
+
+      - name: Fail if cache files detected
+        if: steps.verify-cache-files.outputs.files_changed == 'true'
+        run: |
+          echo "❌ Python cache files detected in commit:"
+          echo "${{ steps.verify-cache-files.outputs.changed_files }}"
+          echo ""
+          echo "Please remove these files and ensure they are in .gitignore:"
+          echo "  git rm -r --cached \$(find . -name '__pycache__' -type d)"
+          echo "  git rm --cached \$(find . -name '*.pyc' -o -name '*.pyo')"
+          echo "  git commit -m 'Remove Python cache files'"
+          echo ""
+          echo "To prevent this in the future, make sure your .gitignore includes:"
+          echo "  __pycache__/"
+          echo "  *.py[cod]"
+          echo "  .pytest_cache/"
+          exit 1
+
+      - name: Success message
+        if: steps.verify-cache-files.outputs.files_changed == 'false'
+        run: |
+          echo "✅ No Python cache files detected in commit"
+
+  lint-gitignore:
+    runs-on: ubuntu-latest
+    name: Verify .gitignore includes Python patterns
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check .gitignore for Python patterns
+        uses: tj-actions/verify-changed-files@v20
+        id: check-gitignore
+        with:
+          files: .gitignore
+
+      - name: Verify Python patterns in .gitignore
+        run: |
+          echo "🔍 Checking .gitignore for required Python patterns..."
+          
+          required_patterns=(
+            "__pycache__/"
+            "*.py[cod]"
+            ".pytest_cache/"
+            "*.egg-info/"
+            ".coverage"
+          )
+          
+          missing_patterns=()
+          
+          for pattern in "${required_patterns[@]}"; do
+            if ! grep -q "$pattern" .gitignore; then
+              missing_patterns+=("$pattern")
+            fi
+          done
+          
+          if [ ${#missing_patterns[@]} -eq 0 ]; then
+            echo "✅ All required Python patterns found in .gitignore"
+          else
+            echo "❌ Missing Python patterns in .gitignore:"
+            printf '%s\n' "${missing_patterns[@]}"
+            echo ""
+            echo "Please add these patterns to your .gitignore file"
+            exit 1
+          fi
+
+  cleanup-check:
+    runs-on: ubuntu-latest
+    name: Verify repository cleanliness
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies and run tests
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests to generate cache files
+        run: |
+          pytest tests/ -v || true
+
+      - name: Check if cache files were created
+        run: |
+          cache_files=$(find . -name "__pycache__" -type d -o -name "*.pyc" -o -name "*.pyo" | head -10)
+          if [ -n "$cache_files" ]; then
+            echo "⚠️  Cache files were generated during testing:"
+            echo "$cache_files"
+            echo ""
+            echo "This is normal - they should be ignored by .gitignore"
+            
+            # Verify they're actually ignored
+            git status --porcelain | grep -E "(__pycache__|\.pyc|\.pyo)" && {
+              echo "❌ Cache files are being tracked by Git!"
+              exit 1
+            } || {
+              echo "✅ Cache files are properly ignored by Git"
+            }
+          else
+            echo "✅ No cache files generated"
+          fi
