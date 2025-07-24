@@ -88,9 +88,24 @@ The Jira integration stack requires the following parameters during deployment:
 ### Configure Jira Automation (Required)
 
 1. In your Jira project, go to Project settings > Automation
-2. Create rules to send events to AWS when issues are created, updated, or deleted
-3. Use the AWS SNS trigger in Jira automation
-4. Configure the SNS topic ARN (this will be available after deployment)
+2. Create rules to send events to AWS when issues are created, updated, or deleted. Use the AWS SNS trigger in Jira automation. Use the
+   SNS topic ARN to configure the connection. This can be done as follows:
+   1. Add the trigger `When: Field value changed`.
+   2. Select all the fields from the dropdown `Fields to monitor for changes`.
+   3. Select `Change type` as `Any changes to the field value`
+   4. Select `For` as `All work item operations`
+   5. Click on `Next`
+   6. In `Add a component`, select `THEN: Add an action`
+   7. In `Add an action`, select `Send message to Amazon SNS topic`
+   8. In `Connect to Amazon SNS`, click on Connect
+   9. In the pop-up for `Connect to Amazon SNS`, use the SNS topic ARN that was created for Jira integration from the Cloudformation stack
+   10. After adding the connection, in the Key-value pairs for the message to be send to SNS on the action execution:
+       1. Enter `IssueId` as the key
+       2. For datatype, select `String` from the dropdown
+       3. Enter `{{issue.key}}` as the value
+   11. Click on `Save`
+   12. Click on `Turn on rule`
+   13. (Optionally) Click on the drop down next to `Turn on rule`, and select `Validation rule` for testing the rule.
 
 ### Perform a basic test (Optional)
 

@@ -618,7 +618,7 @@ def handler(event, context) -> dict:
 
     if event["source"] == EVENT_SOURCE:
         logger.info("Security Incident Response Client lambda will process this event")
-        process_jira_event(event)
+        process_jira_event(event.get("detail"))
 
     else:
         logger.info(
