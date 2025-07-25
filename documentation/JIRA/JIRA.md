@@ -151,7 +151,7 @@ Follow the steps below to create a rule to trigger events to AWS when an operati
 
    1. Same as the previous section, in the `Automation` page, click on `Create Rule` > `Create from scratch` button.
    2. For `When: Add a trigger`, select `Work item commented` from `Add a trigger` pane on the right hand side.
-   ![alt text](../images/image.png)
+   ![alt text](../images/image-1.png)
    3. Now, in `Work item commented` pane on the right, select all the fields from the dropdown `Comment Type` i.e. `Comment is the main action`, `Comment added during status transition`, `Comment added while editing work item fields`
    ![alt text](../images/image-12.png)
    4. Click on `Next`
