@@ -98,23 +98,6 @@ in the command-line using the following steps:
 
 4. See [JIRA documentation](documentation/JIRA/JIRA.md) for detailed instructions on how to deploy JIRA integration.
 5. See [ServiceNow documentation](documentation/SERVICE_NOW/SERVICE_NOW.md) for detailed instructions on how to deploy ServiceNow integration.
-   
-
-6. Use the `service-now` argument to deploy the ServiceNow integration:
-   `deploy-integrations-solution service-now -h`
-   You should see the following output:
-
-   ```
-   usage: deploy-integrations-solution service-now [-h] --instance-id INSTANCE --username USERNAME --password PASSWORD
-
-   options:
-      -h, --help           show this help message and exit
-      --instance-id INSTANCE ServiceNow instance ID
-      --username USERNAME  ServiceNow username
-      --password PASSWORD  ServiceNow password
-      --log-level    {info,debug,error} Log level for Lambda functions
-   ```
-   See [ServiceNow Integration](documentation/SERVICE_NOW/SERVICE_NOW.md)
 
 ## Features
 
