@@ -1,47 +1,47 @@
 # AWS Security Incident Response Sample Integrations
 
-This project provides sample integrations for AWS Security Incident Response, enabling customers to seamlessly integrate the service with their existing applications for incident response, stakeholder notifications, and case management. Currently, the solution provides integration with the following applications:
+This project provides sample integrations for [AWS Security Incident Response](https://aws.amazon.com/security-incident-response/), enabling customers to seamlessly integrate the service with their existing applications for incident response, stakeholder notifications, and case management.
 
-[![Jira Integration](https://img.shields.io/badge/Integration-Jira-0052CC)](JIRA.md)
-```bash
-deploy-integrations-solution jira \
-  --email <your-jira-email> \
-  --url <your-jira-url> \
-  --token <your-jira-api-token> \
-  --project-key <your-jira-project-key> \
-  --log-level info
-```
-
-[![ServiceNow Integration](https://img.shields.io/badge/Integration-ServiceNow-81B5A1)](SERVICE_NOW.md)
-```bash
-deploy-integrations-solution service-now \
-  --instance-id <your-servicenow-instance-id> \
-  --username <your-servicenow-username> \
-  --password <your-servicenow-password> \
-  --log-level info
-```
-
-**Note: Follow the steps in Getting Started section below to perform the above deployments**
+AWS Security Incident Response helps you respond when it matters most. The service combines the power of automated monitoring and investigation, accelerated communication and coordination, and direct 24/7 access to the AWS Customer Incident Response Team (CIRT) to quickly prepare for, respond to, and recover from security events. 
 
 ## Getting Started
+
+If you are looking to integrate AWS Security Incident Response with JIRA or ServiceNow, follow the steps below:
 
 ### Prerequisites
 
 - **AWS Account** with permissions to create the required resources
-- **AWS CDK** v2.x installed (`npm install -g aws-cdk`)
-- **Python 3.9+** installed
-- **AWS CLI** configured with appropriate permissions
-- **Jira Cloud** account (for Jira integration)
-- **ServiceNow** instance with admin access (for ServiceNow integration)
+- **For Jira integration**
+  - Jira Cloud account
+- **For ServiceNow integration**
+  - ServiceNow instance with admin access
 
 ### Installation
 
-1. Clone the repository
-2. Install dependencies
+**Note: Please skip this section if you are using `CloudShell` as your development workspace**
+
+Install the following applications in your local development workstations or EC2 instances (if not installed already):
+
+- **AWS CDK v2.x**: Follow the installation steps in the [CDK documentation](https://docs.aws.amazon.com/cdk/v2/guide/getting-started.html).
+- **Python v3.x**: Download and follow the instructions in the [Python documentation](https://www.python.org/downloads/).
+- **AWS CLI**: Configured with appropriate permissions. To install, follow the setup instructions in the [AWS CLI documentation](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
+- **NVM**: Use the install and update script command `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash` followed by `source ~/.bashrc`. For more details, see the Node Version Manager's README in [NVM's GitHub repo](https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating).
+- **Node**: Run `nvm install --lts` and `nvm use --lts` to install and use the latest Long Term Support (LTS) version of Node.js.
+- **PIP**: Should already be included with Python installation (for versions Python 3.4 and above). For more details, see [pip documentation](https://pip.pypa.io/en/stable/installation/)
+- **Docker**: For a complete guide on how to install/setup Docker engine on different OSs, see [Docker Engine documentation](https://docs.docker.com/engine/install/).
+  
+### Setup Solution Repository
+
+1. Clone the repository: `git clone https://github.com/aws-samples/sample-aws-security-incident-response-integrations.git`
+   1. If you had already cloned the repository before, make sure to pull the latest changes: `git pull`
+2. Install solution dependencies
+
    ```
    pip install -r requirements.txt
    ```
-3. Install development dependencies (optional):
+
+3. (Optional - for development purposes) Install development dependencies:
+
    ```
    pip install -r requirements-dev.txt
    ```
@@ -51,19 +51,19 @@ deploy-integrations-solution service-now \
 For deployment of an integration pattern, install and use the `deploy-integrations-solution` supplementary python app
 in the command-line using the following steps:
 
-1. Add the `deploy-integrations-solution.py` script to the `bin` path using the following commands:
+1. Make the `deploy-integrations-solution.py` script executable by using the following command:
    ```
-   sudo cp deploy-integrations-solution.py /usr/local/bin/deploy-integrations-solution
-   ```
-   ```
-   sudo chmod +x /usr/local/bin/deploy-integrations-solution
+   sudo chmod a+x ./deploy-integrations-solution.py
    ```
 
-2. Verify if the `deploy-integrations-solution` works in the command-line by running:
+2. Verify if the `./deploy-integrations-solution.py` command works in the command-line by running:
+
    ```
-   deploy-integrations-solution --help
+   ./deploy-integrations-solution.py --help
    ```
+
    You should see the following output:
+
    ```
    usage: deploy-integrations-solution [-h] [--log-level {info,debug,error}] {jira,service-now} ...
 
@@ -76,51 +76,21 @@ in the command-line using the following steps:
 
    options:
    -h, --help            show this help message and exit
-   ```
-3. Use the `jira` argument to deploy the JIRA integration:
-   `deploy-integrations-solution jira -h`
-   You should see the following output:
-   ```
-   usage: deploy-integrations-solution jira [-h] --email EMAIL --url URL --token TOKEN
 
-   options:
-      -h, --help     show this help message and exit
-      --email EMAIL  Jira email
-      --url URL      Jira URL
-      --token TOKEN  Jira API token
-      --project-key  Jira Project key
-      --log-level    {info,debug,error} Log level for Lambda functions
-   ```
-   Provide the respective parameters for each of the above arguments to perform a deploy:
-   `deploy-integrations-solution jira --email <email> --url <url> --token <token>`
-4. Use the `service-now` argument to deploy the ServiceNow integration:
-   `deploy-integrations-solution service-now -h`
-   You should see the following output:
-   ```
-   usage: deploy-integrations-solution service-now [-h] --instance-id INSTANCE --username USERNAME --password PASSWORD
+#### Integration Target Specific Instructions
 
-   options:
-      -h, --help           show this help message and exit
-      --instance-id INSTANCE ServiceNow instance ID
-      --username USERNAME  ServiceNow username
-      --password PASSWORD  ServiceNow password
-      --log-level    {info,debug,error} Log level for Lambda functions
-   ```
-   Provide the respective parameters for each of the above arguments to perform a deploy:
-   `deploy-integrations-solution service-now --instance <instance> --username <username> --password <password>`
-5. Use the `--log-level` to set the value as `info`, `debug`, `error`. The default log-level is set to `error`
-6. Alternatively, if you are not able to add the `deploy-integrations-solution.py` script to the `bin` path, you can
-   use the script directly by replacing `deploy-integrations-solution` in the above examples with
-   `./deploy-integrations-solution.py` command.
+**See [JIRA documentation](documentation/JIRA/JIRA.md) for detailed instructions on how to deploy JIRA integration.**
+
+**See [ServiceNow documentation](documentation/SERVICE_NOW/SERVICE_NOW.md) for detailed instructions on how to deploy ServiceNow integration.**
 
 ## Overview
 
-AWS Security Incident Response helps customers respond when it matters the most. This project aims to address the gap between the service's public APIs/SDKs and direct connections to common applications like JIRA and ServiceNow. It enables customers to execute API actions directly from their preferred applications while preserving AWS Security Incident Response core capabilities.
+AWS Security Incident Response helps customers respond when it matters the most. This project aims to address the gap between the service's public APIs/SDKs and direct connections to common applications like Slack, JIRA, and ServiceNow. It enables customers to execute API actions directly from their preferred applications while preserving AWS Security Incident Response core capabilities.
 
 This repository contains:
 
-- **[Jira Integration](JIRA.md)**: Bidirectional integration between AWS Security Incident Response and Jira for issue tracking
-- **[ServiceNow Integration](SERVICE_NOW.md)**: Bidirectional integration between AWS Security Incident Response and ServiceNow for incident management
+- **Jira Integration**: Bidirectional integration between AWS Security Incident Response and Jira for issue tracking
+- **ServiceNow Integration**: Bidirectional integration between AWS Security Incident Response and ServiceNow for incident management
 - **Common Infrastructure**: Shared components like EventBridge event bus, DynamoDB tables, and Lambda layers
 - **Deployment Scripts**: Easy-to-use deployment tools for quick setup
 
@@ -128,21 +98,21 @@ This repository contains:
 
 - **Bidirectional Connectivity**: Seamless two-way synchronization between AWS Security Incident Response and target applications
 - **Real-time Updates**: Event-driven architecture ensures near-instantaneous updates across systems
-- **Comprehensive Jira Integration**: 
+- **Comprehensive Jira Integration**:
   - Create, update, and delete issues in Jira based on AWS Security Incident Response cases
   - Sync comments, attachments, and status changes
-  - [Detailed Jira integration documentation](JIRA.md)
-- **Full-featured ServiceNow Integration**: 
+  - [Detailed Jira integration documentation](documentation/JIRA/JIRA.md)
+- **Full-featured ServiceNow Integration**:
   - Create, update, and delete incidents in ServiceNow based on AWS Security Incident Response cases
   - Automatic setup of ServiceNow components (Business Rules, REST Messages)
-  - [Detailed ServiceNow integration documentation](SERVICE_NOW.md)
+  - [Detailed ServiceNow integration documentation](documentation/SERVICE_NOW/SERVICE_NOW.md)
 - **Robust Error Handling**: Dead-letter queues, CloudWatch alarms, and comprehensive logging
 - **Secure by Design**: Least privilege permissions, secure credential storage, and encryption
 - **Extensible Framework**: Modular architecture makes it easy to add new integrations
 
 ## Architecture
 
-![JIRA Integration for AWS Security Incident Response Architecture](images/AWS-Security-Incident-Response-JIRA-architecture.png)
+![JIRA Integration for AWS Security Incident Response Architecture](documentation/images/AWS-Security-Incident-Response-JIRA-architecture-new.png)
 
 ### Core AWS Services
 
@@ -159,31 +129,29 @@ The solution leverages the following AWS services:
 - **AWS Lambda Layers**: Shared code layers for domain models, mappers, and wrappers
 - **AWS Security Incident Response (SIR)**: Core security incident response service
 
-
-
 ## Usage
 
 ### Jira Integration
 
 To use the Jira integration:
 
-1. Deploy the integration using the instructions in the [Jira Integration Documentation](JIRA.md)
+1. Deploy the integration using the instructions in the [Jira Integration Documentation](documentation/JIRA/JIRA.md)
 2. Configure Jira Automation to send events to the SNS topic
 3. Test the integration by creating a security incident in AWS Security Incident Response
 4. Verify that an issue is created in your Jira project
 
-For detailed instructions on setting up the Jira integration, including automation rules, API token creation, and troubleshooting tips, refer to the [Jira Integration Documentation](JIRA.md).
+For detailed instructions on setting up the Jira integration, including automation rules, API token creation, and troubleshooting tips, refer to the [Jira Integration Documentation](documentation/JIRA/JIRA.md).
 
 ### ServiceNow Integration
 
 To use the ServiceNow integration:
 
-1. Deploy the integration using the instructions in the [ServiceNow Integration Documentation](SERVICE_NOW.md)
+1. Deploy the integration using the instructions in the [ServiceNow Integration Documentation](documentation/SERVICE_NOW/SERVICE_NOW.md)
 2. The ServiceNow Resource Setup Lambda will automatically configure the necessary components in ServiceNow
 3. Test the integration by creating a security incident in ServiceNow
 4. Verify that a case is created in AWS Security Incident Response
 
-For detailed instructions on setting up the ServiceNow integration, including business rules, outbound REST messages, and troubleshooting tips, refer to the [ServiceNow Integration Documentation](SERVICE_NOW.md).
+For detailed instructions on setting up the ServiceNow integration, including business rules, outbound REST messages, and troubleshooting tips, refer to the [ServiceNow Integration Documentation](documentation/SERVICE_NOW/SERVICE_NOW.md).
 
 ## Troubleshooting
 
@@ -199,7 +167,7 @@ The integration includes robust error handling mechanisms:
 2. **CloudWatch Alarms**: Alarms trigger when messages appear in the DLQ
 3. **CloudWatch Dashboard**: Provides visibility into the integration's health
 
-![AWS Security Incident Response CloudWatch Dashboard](images/cloud-watch.png)
+![AWS Security Incident Response CloudWatch Dashboard](documentation/images/cloud-watch-new.png)
 
 **Where is the DLQ?**
 
@@ -216,8 +184,8 @@ To process failed events in the DLQ:
 
 ### Integration-Specific Troubleshooting
 
-- For Jira integration issues, see the [Jira Integration Troubleshooting Guide](JIRA.md#troubleshooting)
-- For ServiceNow integration issues, see the [ServiceNow Integration Troubleshooting Guide](SERVICE_NOW.md#troubleshooting)
+- For Jira integration issues, see the [Jira Integration Troubleshooting Guide](documentation/JIRA/JIRA.md#troubleshooting)
+- For ServiceNow integration issues, see the [ServiceNow Integration Troubleshooting Guide](documentation/SERVICE_NOW/SERVICE_NOW_TROUBLESHOOTING.md)
 
 ### Getting Help
 
@@ -244,11 +212,13 @@ pytest
 This project uses [ruff](https://github.com/astral-sh/ruff) to enforce code quality standards. To set up ruff:
 
 1. Install development dependencies:
+
 ```
 pip install -r requirements-dev.txt
 ```
 
 2. Format code
+
 ```
 ruff format
 ```
