@@ -9,7 +9,7 @@ def deploy_jira(args):
     try:
         cmd = [
             "npx", "cdk", "deploy",
-            "--app", "python app.py",
+            "--app", "python3 app.py",
             "AwsSecurityIncidentResponseSampleIntegrationsCommonStack",
             "AwsSecurityIncidentResponseJiraIntegrationStack",
             "--parameters", f"AwsSecurityIncidentResponseSampleIntegrationsCommonStack:logLevel={args.log_level}",
@@ -36,7 +36,7 @@ def deploy_servicenow(args):
         print("Service Now integration is under development/maintenance...Please wait for its release")
         # cmd = [
         #     "npx", "cdk", "deploy",
-        #     "--app", "python app_service_now.py",
+        #     "--app", "python3 app_service_now.py",
         #     "AwsSecurityIncidentResponseSampleIntegrationsCommonStack",
         #     "AwsSecurityIncidentResponseServiceNowIntegrationStack",
         #     "--parameters", f"AwsSecurityIncidentResponseSampleIntegrationsCommonStack:logLevel={args.log_level}",

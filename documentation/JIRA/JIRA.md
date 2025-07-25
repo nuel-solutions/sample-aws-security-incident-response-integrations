@@ -6,28 +6,63 @@ This document provides an overview of the AWS Security Incident Response Jira in
 
 - [Quick Start](#quick-start)
 - [Prerequisites](#prerequisites)
-- [Parameters](#parameters)
 - [Post Deployment](#post-deployment)
 - [Architecture](#architecture)
+  - [Integration Overview](#integration-overview)
+  - [Integration Flow](#integration-flow)
+    - [Flow 1: AWS Security Incident Response to Jira](#flow-1-aws-security-incident-response-to-jira)
+    - [Flow 2: Jira to AWS Security Incident Response](#flow-2-jira-to-aws-security-incident-response)
 - [Resources](#resources)
   - [AWS Resources](#aws-resources)
+    - [Lambda Functions](#lambda-functions)
+    - [SNS Topic](#sns-topic)
+    - [EventBridge Rules](#eventbridge-rules)
+    - [SSM Parameters](#ssm-parameters)
+    - [IAM Roles](#iam-roles)
+    - [DynamoDB Table](#dynamodb-table)
   - [Jira Resources](#jira-resources)
 - [Setup and Configuration](#setup-and-configuration)
-- [Troubleshooting and Validation](JIRA_TROUBLESHOOTING.md)
+- [Troubleshooting and Validation](#troubleshooting-and-validation)
 - [Frequently Asked Questions](#frequently-asked-questions)
+  - [General Questions](#general-questions)
+  - [Technical Questions](#technical-questions)
 - [Related Resources](#related-resources)
 
 ## Quick Start
 
-```bash
-# Deploy the integration with a single command
-deploy-integrations-solution jira \
-  --email <your-jira-email> \
-  --url <your-jira-url> \
-  --token <your-jira-api-token> \
-  --project-key <your-jira-project-key> \
-  --log-level {info, debug, error}
-```
+1. Use the `jira` argument to deploy the JIRA integration:
+   `deploy-integrations-solution jira -h`
+   You should see the following output:
+
+   ```
+   usage: deploy-integrations-solution jira [-h] --email EMAIL --url URL --token TOKEN
+
+   options:
+      -h, --help     show this help message and exit
+      --email EMAIL  Jira email
+      --url URL      Jira URL
+      --token TOKEN  Jira API token
+      --project-key  Jira Project key
+      --log-level    info,debug,error: Log level for Lambda functions
+2. Deploy the integration with a single command
+
+   ```bash
+   deploy-integrations-solution jira \
+      --email <your-jira-email> \
+      --url <your-jira-url> \
+      --token <your-jira-api-token> \
+      --project-key <your-jira-project-key> \
+      --log-level {info, debug, error}
+
+The Jira integration stack requires the following parameters during deployment:
+
+| Parameter | Description | Type | Required | Example |
+|-----------|-------------|------|----------|---------|
+| `jiraEmail` | The email address associated with your Jira account | String | Yes | `user@example.com` |
+| `jiraUrl` | The URL of your Jira instance | String | Yes | `https://your-company.atlassian.net` |
+| `jiraToken` | The API token for Jira API access | String | Yes | `********` |
+| `jiraProjectKey` | The key of the Jira project where issues will be created | String | Yes | `SEC` |
+| `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
 
 See the section below for instructions on how to obtain your Jira email, URL, and API token.
 
@@ -71,41 +106,57 @@ See the section below for instructions on how to obtain your Jira email, URL, an
 2. Note the project key (e.g., "SEC" or "SECURITY")
 3. Ensure you have appropriate permissions in this project
 
-## Parameters
-
-The Jira integration stack requires the following parameters during deployment:
-
-| Parameter | Description | Type | Required | Example |
-|-----------|-------------|------|----------|---------|
-| `jiraEmail` | The email address associated with your Jira account | String | Yes | `user@example.com` |
-| `jiraUrl` | The URL of your Jira instance | String | Yes | `https://your-company.atlassian.net` |
-| `jiraToken` | The API token for Jira API access | String | Yes | `********` |
-| `jiraProjectKey` | The key of the Jira project where issues will be created | String | Yes | `SEC` |
-| `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
-
 ## Post Deployment
+
+Once the deployment of the JIRA integration is complete, you will need to configure JIRA automation rules to provision JIRA to AWS Security Incident Response flow. 
 
 ### Configure Jira Automation (Required)
 
-1. In your Jira project, go to Project settings > Automation
-2. Create rules to send events to AWS when issues are created, updated, or deleted. Use the AWS SNS trigger in Jira automation. Use the
-   SNS topic ARN to configure the connection. This can be done as follows:
-   1. Add the trigger `When: Field value changed`.
-   2. Select all the fields from the dropdown `Fields to monitor for changes`.
-   3. Select `Change type` as `Any changes to the field value`
-   4. Select `For` as `All work item operations`
-   5. Click on `Next`
-   6. In `Add a component`, select `THEN: Add an action`
-   7. In `Add an action`, select `Send message to Amazon SNS topic`
-   8. In `Connect to Amazon SNS`, click on Connect
-   9. In the pop-up for `Connect to Amazon SNS`, use the SNS topic ARN that was created for Jira integration from the Cloudformation stack
-   10. After adding the connection, in the Key-value pairs for the message to be send to SNS on the action execution:
+You can configure Automation Rules in JIRA via Project settings. In your Jira project, go to Project settings > Automation. You can do so by clicking on three dots next to your project on the left pane in Jira, and selecting Project settings from the drop-down. See the screenshot below:
+![alt text](../images/image-1.png)  
+
+#### Configure Automation Rule for Field Value Changed trigger (Required)
+
+Follow the steps below to create a rule to trigger events to AWS when an issue is created, updated, or deleted OR an issue field is changed, using the AWS SNS topic arn:
+
+   1. In the `Automation` page, click on `Create Rule` > `Create from scatch` button.
+   ![alt text](../images/image-3.png)
+   2. For `When: Add a trigger`, select `Field value changed` from `Add a trigger` pane on the right hand side.
+   ![alt text](../images/image-4.png)
+   3. Now, in `Field value changed` pane on the right, select all the fields from the dropdown `Fields to monitor for changes`.
+   ![alt text](../images/image-5.png)
+   4. Select `Change type` as `Any changes to the field value` *(default)*
+   5. Select `For` as `All work item operations` *(default)*
+   6. Click on `Next`
+   7. For `New component`, select `THEN: Add an action` from `Add a component` pane on the right hand side.
+   ![alt text](../images/image-6.png)
+   8. Now, in `Add an action` pane on the right, select `Send message to Amazon SNS topic` option
+   ![alt text](../images/image-7.png)
+   9. Before we proceed to the next step, retrieve the AWS SNS topic arn from the JIRA integration stack that got deployed in your AWS account: CloudFormation > AwsSecurityIncidentResponseJiraIntegrationStack > Resources tab > Expand JiraNotificationsTopic resource > Copy the `Physical Id` which is the arn for the `JiraNotificationsTopic` 
+   ![alt text](../images/image-8.png)
+   10. Going back to the JIRA Automation page, in the `Send message to Amazon SNS topic` pane on the right, click on the `Connect` button under Connect Amazon SNS to Atlassian Automation. This should open up a pop-up - `Connect to Amazon SNS`. Within this pop-up, enter the SNS topic arn copied in the previous step.
+   ![alt text](../images/image-9.png)
+   11. After adding the connection, in the Key-value pairs under the `Send message to Amazon SNS topic` pane on the right:
        1. Enter `IssueId` as the key
        2. For datatype, select `String` from the dropdown
        3. Enter `{{issue.key}}` as the value
-   11. Click on `Save`
-   12. Click on `Turn on rule`
-   13. (Optionally) Click on the drop down next to `Turn on rule`, and select `Validation rule` for testing the rule.
+   ![alt text](../images/image-10.png)
+   12. (Optionally) Click on the down arrow next to `Turn on rule` button, and select `Validate rule` to test the rule connection. If the validation is successful, you should see a message `Your rule is ready to turn on. Keep an eye on the audit log for any further errors.`
+   ![alt text](../images/image-11.png)
+   13. Click on `Turn on rule`
+
+#### Configure Automation Rule for Work Item Commented trigger (Required)
+
+Follow the steps below to create a rule to trigger events to AWS when an operation is performed on issue comments, using the AWS SNS topic arn:
+
+   1. Same as the previous section, in the `Automation` page, click on `Create Rule` > `Create from scratch` button.
+   2. For `When: Add a trigger`, select `Work item commented` from `Add a trigger` pane on the right hand side.
+   ![alt text](../images/image.png)
+   3. Now, in `Work item commented` pane on the right, select all the fields from the dropdown `Comment Type` i.e. `Comment is the main action`, `Comment added during status transition`, `Comment added while editing work item fields`
+   ![alt text](../images/image-12.png)
+   4. Click on `Next`
+   5. For `New component`, select `THEN: Add an action` from `Add a component` pane on the right hand side.
+   6. Now, follow the steps 8 to 13 from the previous section.
 
 ### Perform a basic test (Optional)
 
