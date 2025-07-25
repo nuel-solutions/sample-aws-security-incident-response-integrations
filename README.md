@@ -117,7 +117,7 @@ in the command-line using the following steps:
 
 ## Architecture
 
-![JIRA Integration for AWS Security Incident Response Architecture](documentation/images/AWS-Security-Incident-Response-JIRA-architecture.png)
+![JIRA Integration for AWS Security Incident Response Architecture](documentation/images/AWS-Security-Incident-Response-JIRA-architecture-new.png)
 
 ### Core AWS Services
 
@@ -172,7 +172,7 @@ The integration includes robust error handling mechanisms:
 2. **CloudWatch Alarms**: Alarms trigger when messages appear in the DLQ
 3. **CloudWatch Dashboard**: Provides visibility into the integration's health
 
-![AWS Security Incident Response CloudWatch Dashboard](documentation/images/cloud-watch.png)
+![AWS Security Incident Response CloudWatch Dashboard](documentation/images/cloud-watch-new.png)
 
 **Where is the DLQ?**
 
