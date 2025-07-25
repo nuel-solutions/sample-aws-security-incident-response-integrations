@@ -1,19 +1,12 @@
 # AWS Security Incident Response Sample Integrations
 
-This project provides sample integrations for AWS Security Incident Response, enabling customers to seamlessly integrate the service with their existing applications for incident response, stakeholder notifications, and case management.
+This project provides sample integrations for [AWS Security Incident Response](https://aws.amazon.com/security-incident-response/), enabling customers to seamlessly integrate the service with their existing applications for incident response, stakeholder notifications, and case management.
 
-## Overview
-
-AWS Security Incident Response helps customers respond when it matters the most. This project aims to address the gap between the service's public APIs/SDKs and direct connections to common applications like Slack, JIRA, and ServiceNow. It enables customers to execute API actions directly from their preferred applications while preserving AWS Security Incident Response core capabilities.
-
-This repository contains:
-
-- **Jira Integration**: Bidirectional integration between AWS Security Incident Response and Jira for issue tracking
-- **ServiceNow Integration**: Bidirectional integration between AWS Security Incident Response and ServiceNow for incident management
-- **Common Infrastructure**: Shared components like EventBridge event bus, DynamoDB tables, and Lambda layers
-- **Deployment Scripts**: Easy-to-use deployment tools for quick setup
+AWS Security Incident Response helps you respond when it matters most. The service combines the power of automated monitoring and investigation, accelerated communication and coordination, and direct 24/7 access to the AWS Customer Incident Response Team (CIRT) to quickly prepare for, respond to, and recover from security events. 
 
 ## Getting Started
+
+If you are looking to integrate AWS Security Incident Response with JIRA or ServiceNow, follow the steps below:
 
 ### Prerequisites
 
@@ -30,17 +23,12 @@ This repository contains:
 Install the following applications in your local development workstations or EC2 instances (if not installed already):
 
 - **AWS CDK v2.x**: Follow the installation steps in the [CDK documentation](https://docs.aws.amazon.com/cdk/v2/guide/getting-started.html).
-- **Python v3.9+**: Download and follow the instructions in the [Python documentation](https://www.python.org/downloads/).
+- **Python v3.x**: Download and follow the instructions in the [Python documentation](https://www.python.org/downloads/).
 - **AWS CLI**: Configured with appropriate permissions. To install, follow the setup instructions in the [AWS CLI documentation](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html).
 - **NVM**: Use the install and update script command `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash` followed by `source ~/.bashrc`. For more details, see the Node Version Manager's README in [NVM's GitHub repo](https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating).
 - **Node**: Run `nvm install --lts` and `nvm use --lts` to install and use the latest Long Term Support (LTS) version of Node.js.
 - **PIP**: Should already be included with Python installation (for versions Python 3.4 and above). For more details, see [pip documentation](https://pip.pypa.io/en/stable/installation/)
-- **Docker**: Use `sudo yum install -y docker` to install the Docker engine on linux based systems. For a complete guide on how to install/setup Docker engine on different OSs, see [Docker Engine documentation](https://docs.docker.com/engine/install/).
-  - In order to synthesize and deploy the integration solution, docker should be running. You can start docker by running the following commands:
-    - `sudo systemctl start docker.service`
-    - `docker ps`
-    - `chmod a+wr /var/run/docker.sock`
-  - Alternatively if you want to use Docker Desktop, follow the guidance in Docker docs for [Getting Docker](https://docs.docker.com/get-started/get-docker/)
+- **Docker**: For a complete guide on how to install/setup Docker engine on different OSs, see [Docker Engine documentation](https://docs.docker.com/engine/install/).
   
 ### Setup Solution Repository
 
@@ -63,20 +51,15 @@ Install the following applications in your local development workstations or EC2
 For deployment of an integration pattern, install and use the `deploy-integrations-solution` supplementary python app
 in the command-line using the following steps:
 
-1. Add the `deploy-integrations-solution.py` script to the `bin` path using the following commands:
-
+1. Make the `deploy-integrations-solution.py` script executable by using the following command:
    ```
-   sudo cp deploy-integrations-solution.py /usr/local/bin/deploy-integrations-solution
-   ```
-
-   ```
-   sudo chmod +x /usr/local/bin/deploy-integrations-solution
+   sudo chmod a+x ./deploy-integrations-solution.py
    ```
 
-2. Verify if the `deploy-integrations-solution` works in the command-line by running:
+2. Verify if the `./deploy-integrations-solution.py` command works in the command-line by running:
 
    ```
-   deploy-integrations-solution --help
+   ./deploy-integrations-solution.py --help
    ```
 
    You should see the following output:
@@ -94,10 +77,22 @@ in the command-line using the following steps:
    options:
    -h, --help            show this help message and exit
 
-3. Alternatively, if you are not able to add the `deploy-integrations-solution.py` script to the `bin` path, you can use the script directly by replacing `deploy-integrations-solution` in the above examples with `./deploy-integrations-solution.py` command.
+#### Integration Target Specific Instructions
 
-4. See [JIRA documentation](documentation/JIRA/JIRA.md) for detailed instructions on how to deploy JIRA integration.
-5. See [ServiceNow documentation](documentation/SERVICE_NOW/SERVICE_NOW.md) for detailed instructions on how to deploy ServiceNow integration.
+**See [JIRA documentation](documentation/JIRA/JIRA.md) for detailed instructions on how to deploy JIRA integration.**
+
+**See [ServiceNow documentation](documentation/SERVICE_NOW/SERVICE_NOW.md) for detailed instructions on how to deploy ServiceNow integration.**
+
+## Overview
+
+AWS Security Incident Response helps customers respond when it matters the most. This project aims to address the gap between the service's public APIs/SDKs and direct connections to common applications like Slack, JIRA, and ServiceNow. It enables customers to execute API actions directly from their preferred applications while preserving AWS Security Incident Response core capabilities.
+
+This repository contains:
+
+- **Jira Integration**: Bidirectional integration between AWS Security Incident Response and Jira for issue tracking
+- **ServiceNow Integration**: Bidirectional integration between AWS Security Incident Response and ServiceNow for incident management
+- **Common Infrastructure**: Shared components like EventBridge event bus, DynamoDB tables, and Lambda layers
+- **Deployment Scripts**: Easy-to-use deployment tools for quick setup
 
 ## Features
 

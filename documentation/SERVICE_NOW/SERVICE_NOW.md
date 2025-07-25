@@ -1,26 +1,12 @@
-# AWS Security Incident Response ServiceNow Integration
+# ServiceNow Integration is not released yet
 
-This document provides an overview of the AWS Security Incident Response ServiceNow integration, including its architecture, resources, parameters, and outputs.
+This document will provide, when its ready, an overview of the AWS Security Incident Response ServiceNow integration, including its architecture, resources, parameters, and outputs.
 
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [Prerequisites](#prerequisites)
-- [Parameters](#parameters)
-- [Post Deployment](#post-deployment)
-- [Architecture](#architecture)
-  - [Integration Overview](#integration-overview)
-  - [Integration Flow](#integration-flow)
-- [Resources](#resources)
-  - [AWS Resources](#aws-resources)
-  - [ServiceNow Resources](#servicenow-resources)
-- [Troubleshooting and Validation](SERVICE_NOW_TROUBLESHOOTING.md)
-
-## Quick Start
+## Deployment
 
 ```bash
 # Deploy the integration with a single command
-deploy-integrations-solution service-now \
+./deploy-integrations-solution.py service-now \
   --instance <your-servicenow-instance-id> \
   --username <your-servicenow-username> \
   --password <your-servicenow-password> \

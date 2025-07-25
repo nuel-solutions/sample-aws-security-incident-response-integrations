@@ -2,36 +2,10 @@
 
 This document provides an overview of the AWS Security Incident Response Jira integration, including its architecture, resources, parameters, and outputs.
 
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [Prerequisites](#prerequisites)
-- [Post Deployment](#post-deployment)
-- [Architecture](#architecture)
-  - [Integration Overview](#integration-overview)
-  - [Integration Flow](#integration-flow)
-    - [Flow 1: AWS Security Incident Response to Jira](#flow-1-aws-security-incident-response-to-jira)
-    - [Flow 2: Jira to AWS Security Incident Response](#flow-2-jira-to-aws-security-incident-response)
-- [Resources](#resources)
-  - [AWS Resources](#aws-resources)
-    - [Lambda Functions](#lambda-functions)
-    - [SNS Topic](#sns-topic)
-    - [EventBridge Rules](#eventbridge-rules)
-    - [SSM Parameters](#ssm-parameters)
-    - [IAM Roles](#iam-roles)
-    - [DynamoDB Table](#dynamodb-table)
-  - [Jira Resources](#jira-resources)
-- [Setup and Configuration](#setup-and-configuration)
-- [Troubleshooting and Validation](#troubleshooting-and-validation)
-- [Frequently Asked Questions](#frequently-asked-questions)
-  - [General Questions](#general-questions)
-  - [Technical Questions](#technical-questions)
-- [Related Resources](#related-resources)
-
-## Quick Start
+## Deployment
 
 1. Use the `jira` argument to deploy the JIRA integration:
-   `deploy-integrations-solution jira -h`
+   `./deploy-integrations-solution.py jira -h`
    You should see the following output:
 
    ```
@@ -47,7 +21,7 @@ This document provides an overview of the AWS Security Incident Response Jira in
 2. Deploy the integration with a single command
 
    ```bash
-   deploy-integrations-solution jira \
+   ./deploy-integrations-solution.py jira \
       --email <your-jira-email> \
       --url <your-jira-url> \
       --token <your-jira-api-token> \
@@ -65,8 +39,6 @@ The Jira integration stack requires the following parameters during deployment:
 | `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
 
 See the section below for instructions on how to obtain your Jira email, URL, and API token.
-
-## Prerequisites
 
 ### Getting Your Jira Email
 
@@ -161,6 +133,10 @@ Follow the steps below to create a rule to trigger events to AWS when an operati
 ### Perform a basic test (Optional)
 
 Create a test Case in AWS Security Incident Response and verify it appears in Jira.
+
+## Troubleshooting and Validation
+
+For detailed information on outputs, validation, troubleshooting, and security considerations, please refer to the [Jira Troubleshooting Guide](JIRA_TROUBLESHOOTING.md).
 
 ## Architecture
 
@@ -271,14 +247,6 @@ To use this integration, you'll need to configure the following in your Jira ins
 3. **Jira Issue Type**:
    - The integration creates issues with the "Task" issue type by default
    - This is configured as a constant in the integration code
-
-## Setup and Configuration
-
-For detailed information on setup, configuration, and deployment steps, please refer to the [Jira Troubleshooting Guide](JIRA_TROUBLESHOOTING.md).
-
-## Troubleshooting and Validation
-
-For detailed information on outputs, validation, troubleshooting, and security considerations, please refer to the [Jira Troubleshooting Guide](JIRA_TROUBLESHOOTING.md).
 
 ## Frequently Asked Questions
 
