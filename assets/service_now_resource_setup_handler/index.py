@@ -85,13 +85,13 @@ class ServiceNowApiService:
     """Class to manage ServiceNow API operations"""
 
     def __init__(
-        self, instance_id, username, password_param_name, secrets_manager_service
+        self, instance_id, username, password_param_name
     ):
         """Initialize the ServiceNow API service"""
         self.instance_id = instance_id
         self.username = username
         self.password_param_name = password_param_name
-        self.secrets_manager_service = secrets_manager_service
+        self.secrets_manager_service = SecretsManagerService()
 
     def __get_password(self, password_param_name) -> Optional[str]:
         """
@@ -187,6 +187,52 @@ class ServiceNowApiService:
                 )
         except Exception as e:
             logger.error(f"Error adding parameters to Http request function: {str(e)}")
+            
+    def __update_outbound_rest_message_request_function_headers(
+        self,
+        headers,
+        base_url,
+        outbound_rest_message_request_function_name,
+        api_auth_secret_arn
+    ):
+        """Create/Update Http request headers to be used in the Outbound REST Message function resource in ServiceNow for integration"""
+        try:
+            logger.info(
+                "Updating Http request headers in the Outbound REST Message function resource in ServiceNow for integration with AWS Security Incident Response"
+            )
+            
+            # Get API auth token from Secrets Manager
+            auth_token = (
+                self.secrets_manager_service.get_secret_value(api_auth_secret_arn)
+                if api_auth_secret_arn
+                else None
+            )
+            
+            # Update Authorization header if token is available
+            if auth_token:
+                rest_message_post_function_headers_payload = { 
+                                    "rest_message_function": f"{outbound_rest_message_request_function_name}",
+                                    "name": "Authorization",
+                                    "value": f"Bearer {auth_token}"
+                            }
+            
+            rest_message_post_function_headers_response = requests.post(
+                f"{base_url}/api/now/table/sys_rest_message_fn_headers",
+                json=rest_message_post_function_headers_payload,
+                headers=headers,
+                timeout=30,
+            )
+
+            rest_message_post_function_headers_response_json = json.loads(
+                rest_message_post_function_headers_response.text
+            )
+
+            logger.info(
+                f"Http request authorization headers added for Outbound REST Message function with response: {rest_message_post_function_headers_response_json}"
+            )
+        except Exception as e:
+            logger.error(f"Error updating Http request headers for the Outbound REST message function: {str(e)}")
+            return None
 
     def __create_outbound_rest_message_request_function(
         self,
@@ -204,25 +250,12 @@ class ServiceNowApiService:
                 "Creating Http request function in the Outbound REST Message resource in ServiceNow for integration with AWS Security Incident Response"
             )
 
-            # Get API auth token from Secrets Manager
-            auth_token = (
-                self.secrets_manager_service.get_secret_value(api_auth_secret_arn)
-                if api_auth_secret_arn
-                else None
-            )
-
             rest_message_post_function_payload = {
                 "rest_message": f"{outbound_rest_message_name}",
                 "function_name": f"{outbound_rest_message_request_function_name}",
                 "http_method": f"{request_type}",
                 "content": request_content,
             }
-
-            # Add Authorization header if token is available
-            if auth_token:
-                rest_message_post_function_payload["authentication_type"] = "basic"
-                rest_message_post_function_payload["basic_auth_user"] = "Bearer"
-                rest_message_post_function_payload["basic_auth_password"] = auth_token
 
             rest_message_post_function_response = requests.post(
                 f"{base_url}/api/now/table/sys_rest_message_fn",
@@ -237,6 +270,8 @@ class ServiceNowApiService:
             logger.info(
                 f"Http request function for Outbound REST Message created with response: {rest_message_post_function_response_json}"
             )
+            
+            self.__update_outbound_rest_message_request_function_headers(headers, base_url, outbound_rest_message_request_function_name, api_auth_secret_arn)
 
             rest_message_post_function_sys_id = (
                 rest_message_post_function_response_json.get("result").get("sys_id")
@@ -407,7 +442,6 @@ def handler(event, context):
 
     # Get credentials from SSM
     parameter_service = ParameterService()
-    secrets_manager_service = SecretsManagerService()
     instance_id = parameter_service.get_parameter(
         os.environ.get("SERVICE_NOW_INSTANCE_ID")
     )
@@ -415,7 +449,7 @@ def handler(event, context):
     password_param_name = os.environ.get("SERVICE_NOW_PASSWORD_PARAM")
 
     service_now_api_service = ServiceNowApiService(
-        instance_id, username, password_param_name, secrets_manager_service
+        instance_id, username, password_param_name
     )
     (
         service_now_api_outbound_rest_message_name,

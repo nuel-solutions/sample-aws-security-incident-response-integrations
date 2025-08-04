@@ -249,37 +249,6 @@ class ParameterService:
             )
             return None
 
-
-class SecretsManagerService:
-    """Class to handle Secrets Manager operations"""
-
-    def __init__(self):
-        """Initialize the secrets manager service"""
-        self.secrets_client = boto3.client("secretsmanager")
-
-    def get_secret_value(self, secret_arn: str) -> Optional[str]:
-        """
-        Get a secret value from AWS Secrets Manager
-
-        Args:
-            secret_arn: The ARN of the secret to retrieve
-
-        Returns:
-            Secret token value or None if retrieval fails
-        """
-        try:
-            response = self.secrets_client.get_secret_value(SecretId=secret_arn)
-            secret_dict = json.loads(response["SecretString"])
-            return secret_dict.get("token")
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            logger.error(f"Error retrieving secret {secret_arn}: {error_code}")
-            return None
-        except Exception as e:
-            logger.error(f"Error parsing secret value: {str(e)}")
-            return None
-
-
 class EventPublisherService:
     """Service for publishing events to EventBridge"""
 
@@ -1036,43 +1005,6 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
                 },
                 "body": "",
             }
-
-        # Validate authorization token
-        api_auth_secret_arn = os.environ.get("API_AUTH_SECRET")
-        if api_auth_secret_arn:
-            secrets_service = SecretsManagerService()
-            expected_token = secrets_service.get_secret_value(api_auth_secret_arn)
-
-            if not expected_token:
-                logger.error("Failed to retrieve expected token from Secrets Manager")
-                return ResponseBuilderService._build_error_response(
-                    "Authorization configuration error"
-                )
-
-            # Get Authorization header from event
-            headers = event.get("headers", {})
-            auth_header = headers.get("Authorization") or headers.get("authorization")
-
-            if not auth_header:
-                logger.error("Missing Authorization header")
-                return ResponseBuilderService._build_error_response(
-                    "Missing Authorization header"
-                )
-
-            # Extract token from Authorization header (expecting "Bearer <token>" format)
-            if not auth_header.startswith("Bearer "):
-                logger.error("Invalid Authorization header format")
-                return ResponseBuilderService._build_error_response(
-                    "Invalid Authorization header format"
-                )
-
-            provided_token = auth_header[7:]  # Remove "Bearer " prefix
-
-            if provided_token != expected_token:
-                logger.error("Invalid authorization token")
-                return ResponseBuilderService._build_error_response(
-                    "Invalid authorization token"
-                )
 
         # Validate event structure
         if not isinstance(event, dict):

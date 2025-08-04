@@ -201,193 +201,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
             ],
             True,
         )
-
-        """
-        cdk for Secrets Manager secret and assets/secret_rotation lambda with rotation for API Gateway authorization
-        """
-        # Create rotation Lambda role
-        secret_rotation_role = aws_iam.Role(
-            self,
-            "SecretRotationRole",
-            assumed_by=aws_iam.ServicePrincipal("lambda.amazonaws.com"),
-            description="Role for secret rotation Lambda function",
-        )
-
-        secret_rotation_role.add_to_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                actions=[
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents",
-                ],
-                resources=[
-                    f"arn:{Aws.PARTITION}:logs:{self.region}:{self.account}:log-group:/aws/lambda/*"
-                ],
-            )
-        )
-
-        secret_rotation_role.add_to_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                actions=[
-                    "secretsmanager:GetSecretValue",
-                    "secretsmanager:PutSecretValue",
-                    "secretsmanager:UpdateSecretVersionStage",
-                ],
-                resources=["*"],
-            )
-        )
-
-        # Create rotation Lambda function
-        secret_rotation_lambda = py_lambda.PythonFunction(
-            self,
-            "SecretRotationLambda",
-            entry=path.join(path.dirname(__file__), "..", "assets/secret_rotation"),
-            runtime=aws_lambda.Runtime.PYTHON_3_13,
-            timeout=Duration.minutes(5),
-            role=secret_rotation_role,
-        )
-
-        # Create the secret with rotation
-        api_auth_secret = aws_secretsmanager.Secret(
-            self,
-            "ApiAuthSecret",
-            description="API Gateway authorization token for ServiceNow webhook",
-            generate_secret_string=aws_secretsmanager.SecretStringGenerator(
-                secret_string_template='{"token": ""}',
-                generate_string_key="token",
-                exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\@",
-                password_length=32,
-            ),
-        )
-
-        # Configure rotation
-        api_auth_secret.add_rotation_schedule(
-            "RotationSchedule",
-            rotation_lambda=secret_rotation_lambda,
-            automatically_after=Duration.days(120),
-        )
-
-        # Add suppression for rotation role
-        NagSuppressions.add_resource_suppressions(
-            secret_rotation_role,
-            [
-                {
-                    "id": "AwsSolutions-IAM5",
-                    "reason": "Wildcard resources are required for Secrets Manager rotation",
-                    "applies_to": ["Resource::*"],
-                }
-            ],
-            True,
-        )
-
-        """
-        cdk for assets/service_now_notifications_handler
-        """
-        # Create Service Now notifications handler and related resources
-        service_now_notifications_handler_role = aws_iam.Role(
-            self,
-            "ServiceNowNotificationsHandlerRole",
-            assumed_by=aws_iam.ServicePrincipal("lambda.amazonaws.com"),
-            description="Custom role for Service Now Notifications Handler Lambda function",
-        )
-
-        # Add custom policy for CloudWatch Logs permissions
-        service_now_notifications_handler_role.add_to_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                actions=[
-                    "logs:CreateLogGroup",
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents",
-                ],
-                resources=[
-                    f"arn:{Aws.PARTITION}:logs:{self.region}:{self.account}:log-group:/aws/lambda/*"
-                ],
-            )
-        )
-
-        # Grant permission to publish events to EventBridge
-        service_now_notifications_handler_role.add_to_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                actions=["events:PutEvents"],
-                resources=[event_bus.event_bus_arn],
-            )
-        )
-
-        # Grant permission to access SSM parameters
-        service_now_notifications_handler_role.add_to_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                actions=["ssm:GetParameter"],
-                resources=["*"],
-            )
-        )
-
-        # Grant permission to access API auth secret
-        service_now_notifications_handler_role.add_to_policy(
-            aws_iam.PolicyStatement(
-                effect=aws_iam.Effect.ALLOW,
-                actions=["secretsmanager:GetSecretValue"],
-                resources=[api_auth_secret.secret_arn],
-            )
-        )
-
-        # Add suppressions for IAM5 findings related to wildcard resources
-        NagSuppressions.add_resource_suppressions(
-            service_now_notifications_handler_role,
-            [
-                {
-                    "id": "AwsSolutions-IAM5",
-                    "reason": "Wildcard resources are required for SSM parameters",
-                    "applies_to": ["Resource::*"],
-                }
-            ],
-            True,
-        )
-
-        # Create Lambda function for Service Now Notifications handler with custom role
-        service_now_notifications_handler = py_lambda.PythonFunction(
-            self,
-            "ServiceNowNotificationsHandler",
-            entry=path.join(
-                path.dirname(__file__), "..", "assets/service_now_notifications_handler"
-            ),
-            runtime=aws_lambda.Runtime.PYTHON_3_13,
-            layers=[domain_layer, mappers_layer, wrappers_layer],
-            environment={
-                "EVENT_BUS_NAME": event_bus.event_bus_name,
-                "SERVICE_NOW_INSTANCE_ID": service_now_instance_id_ssm.parameter_name,
-                "SERVICE_NOW_USER": service_now_user_ssm.parameter_name,
-                "SERVICE_NOW_PASSWORD_PARAM": service_now_password_ssm_param.parameter_name,
-                "INCIDENTS_TABLE_NAME": table.table_name,
-                "EVENT_SOURCE": SERVICE_NOW_EVENT_SOURCE,
-                "API_AUTH_SECRET": api_auth_secret.secret_arn,
-                "LOG_LEVEL": log_level_param.value_as_string,
-            },
-            role=service_now_notifications_handler_role,
-        )
-
-        # Add a specific rule for ServiceNow notification events
-        service_now_notifications_rule = aws_events.Rule(
-            self,
-            "ServiceNowNotificationsRule",
-            description="Rule to capture events from ServiceNow notifications handler",
-            event_pattern=aws_events.EventPattern(source=[SERVICE_NOW_EVENT_SOURCE]),
-            event_bus=event_bus,
-        )
-
-        # Use the same log group as the event bus logger
-        service_now_notifications_target = aws_events_targets.CloudWatchLogGroup(
-            log_group=event_bus_logger.log_group
-        )
-        service_now_notifications_rule.add_target(service_now_notifications_target)
-
-        # Grant specific DynamoDB permissions instead of full access
-        table.grant_read_write_data(service_now_notifications_handler_role)
-
+        
         """
         cdk for API Gateway to receive events from ServiceNow
         """
@@ -440,7 +254,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
                     aws_logs.LogGroup(
                         self,
                         "ServiceNowApiGatewayLogs",
-                        log_group_name=f"/aws/apigateway/ServiceNowWebhookApi",
+                        log_group_name=f"/aws/apigateway/ServiceNowWebhookApi-{self.node.addr}",
                         retention=aws_logs.RetentionDays.ONE_WEEK,
                         removal_policy=RemovalPolicy.DESTROY,
                     )
@@ -458,6 +272,237 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
 
         # Add dependency to ensure the role is created before the account uses it
         api_gateway_account.node.add_dependency(api_gateway_logging_role)
+        
+        """
+        cdk for Secrets Manager secret with rotation for API Gateway authorization
+        """
+        # Create rotation Lambda role
+        service_now_secret_rotation_handler_role = aws_iam.Role(
+            self,
+            "ServiceNowSecretRotationHandlerRole",
+            assumed_by=aws_iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="Role for ServiceNow secret rotation Lambda function",
+        )
+
+        service_now_secret_rotation_handler_role.add_to_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=[
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                ],
+                resources=[
+                    f"arn:{Aws.PARTITION}:logs:{self.region}:{self.account}:log-group:/aws/lambda/*"
+                ],
+            )
+        )
+
+        service_now_secret_rotation_handler_role.add_to_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=[
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:PutSecretValue",
+                    "secretsmanager:UpdateSecretVersionStage",
+                ],
+                resources=["*"],
+            )
+        )
+
+        # Create rotation Lambda function
+        service_now_secret_rotation_handler = py_lambda.PythonFunction(
+            self,
+            "SecretRotationLambda",
+            entry=path.join(path.dirname(__file__), "..", "assets/service_now_secret_rotation_handler"),
+            runtime=aws_lambda.Runtime.PYTHON_3_13,
+            timeout=Duration.minutes(5),
+            role=service_now_secret_rotation_handler_role
+        )
+
+        # Create the secret with rotation
+        secret_template = '{"token": ""}'  # nosec B106
+        api_auth_secret = aws_secretsmanager.Secret(
+            self,
+            "ApiAuthSecret",
+            description="API Gateway authorization token for ServiceNow webhook",
+            generate_secret_string=aws_secretsmanager.SecretStringGenerator(
+                secret_string_template=secret_template,
+                generate_string_key="token",
+                exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\@",
+                password_length=32,
+            ),
+        )
+
+        # Configure rotation
+        api_auth_secret.add_rotation_schedule(
+            "RotationSchedule",
+            rotation_lambda=service_now_secret_rotation_handler,
+            automatically_after=Duration.days(30),
+        )
+
+        # Add suppression for rotation role
+        NagSuppressions.add_resource_suppressions(
+            service_now_secret_rotation_handler_role,
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "Wildcard resources are required for Secrets Manager rotation",
+                    "applies_to": ["Resource::*"],
+                }
+            ],
+            True,
+        )
+        
+        """
+        cdk for assets/service_now_notifications_handler
+        """
+        # Create Service Now notifications handler and related resources
+        service_now_notifications_handler_role = aws_iam.Role(
+            self,
+            "ServiceNowNotificationsHandlerRole",
+            assumed_by=aws_iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="Custom role for Service Now Notifications Handler Lambda function",
+        )
+
+        # Add custom policy for CloudWatch Logs permissions
+        service_now_notifications_handler_role.add_to_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=[
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                ],
+                resources=[
+                    f"arn:{Aws.PARTITION}:logs:{self.region}:{self.account}:log-group:/aws/lambda/*"
+                ],
+            )
+        )
+
+        # Grant permission to publish events to EventBridge
+        service_now_notifications_handler_role.add_to_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=["events:PutEvents"],
+                resources=[event_bus.event_bus_arn],
+            )
+        )
+
+        # Grant permission to access SSM parameters
+        service_now_notifications_handler_role.add_to_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=["ssm:GetParameter"],
+                resources=["*"],
+            )
+        )
+
+        # Add suppressions for IAM5 findings related to wildcard resources
+        NagSuppressions.add_resource_suppressions(
+            service_now_notifications_handler_role,
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "Wildcard resources are required for SSM parameters",
+                    "applies_to": ["Resource::*"],
+                }
+            ],
+            True,
+        )
+
+        # Create Lambda function for Service Now Notifications handler with custom role
+        service_now_notifications_handler = py_lambda.PythonFunction(
+            self,
+            "ServiceNowNotificationsHandler",
+            entry=path.join(
+                path.dirname(__file__), "..", "assets/service_now_notifications_handler"
+            ),
+            runtime=aws_lambda.Runtime.PYTHON_3_13,
+            layers=[domain_layer, mappers_layer, wrappers_layer],
+            environment={
+                "EVENT_BUS_NAME": event_bus.event_bus_name,
+                "SERVICE_NOW_INSTANCE_ID": service_now_instance_id_ssm.parameter_name,
+                "SERVICE_NOW_USER": service_now_user_ssm.parameter_name,
+                "SERVICE_NOW_PASSWORD_PARAM": service_now_password_ssm_param.parameter_name,
+                "INCIDENTS_TABLE_NAME": table.table_name,
+                "EVENT_SOURCE": SERVICE_NOW_EVENT_SOURCE,
+                "LOG_LEVEL": log_level_param.value_as_string,
+            },
+            role=service_now_notifications_handler_role,
+        )
+
+        # Add a specific rule for ServiceNow notification events
+        service_now_notifications_rule = aws_events.Rule(
+            self,
+            "ServiceNowNotificationsRule",
+            description="Rule to capture events from ServiceNow notifications handler",
+            event_pattern=aws_events.EventPattern(source=[SERVICE_NOW_EVENT_SOURCE]),
+            event_bus=event_bus,
+        )
+
+        # Use the same log group as the event bus logger
+        service_now_notifications_target = aws_events_targets.CloudWatchLogGroup(
+            log_group=event_bus_logger.log_group
+        )
+        service_now_notifications_rule.add_target(service_now_notifications_target)
+
+        # Grant specific DynamoDB permissions instead of full access
+        table.grant_read_write_data(service_now_notifications_handler_role)
+        
+        """
+        cdk for Service Now API Gateway Authorizer
+        """
+        # Create Lambda authorizer for service_now_api_gateway
+        service_now_api_gateway_authorizer_role = aws_iam.Role(
+            self,
+            "ServiceNowApiGatewayAuthorizerRole",
+            assumed_by=aws_iam.ServicePrincipal("lambda.amazonaws.com"),
+            description="Role for ServiceNow API Gateway authorizer Lambda function"
+        )
+        
+        service_now_api_gateway_authorizer_role.add_to_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=[
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                ],
+                resources=[
+                    f"arn:{Aws.PARTITION}:logs:{self.region}:{self.account}:log-group:/aws/lambda/*"
+                ]
+            )
+        )
+        
+        service_now_api_gateway_authorizer_role.add_to_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=["secretsmanager:GetSecretValue"],
+                resources=[api_auth_secret.secret_arn]
+            )
+        )
+        
+        service_now_api_gateway_authorizer_lambda = py_lambda.PythonFunction(
+            self,
+            "ServiceNowApiGatewayAuthorizer",
+            entry=path.join(path.dirname(__file__), "..", "assets/service_now_api_gateway_authorizer"),
+            runtime=aws_lambda.Runtime.PYTHON_3_13,
+            timeout=Duration.seconds(30),
+            environment={
+                "API_AUTH_SECRET": api_auth_secret.secret_arn,
+                "LOG_LEVEL": log_level_param.value_as_string
+            },
+            role=service_now_api_gateway_authorizer_role
+        )
+        
+        # Create API Gateway authorizer
+        service_now_api_gateway_token_authorizer = aws_apigateway.TokenAuthorizer(
+            self,
+            "ServiceNowTokenAuthorizer",
+            handler=service_now_api_gateway_authorizer_lambda,
+            identity_source="method.request.header.Authorization"
+        )
 
         # Create webhook resource and methods
         webhook_resource = service_now_api_gateway.root.add_resource("webhook")
@@ -465,26 +510,29 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
             service_now_notifications_handler
         )
 
-        # Create request validator for headers
-        request_validator = aws_apigateway.RequestValidator(
-            self,
-            "WebhookRequestValidator",
-            rest_api=service_now_api_gateway,
-            validate_request_parameters=True,
-            validate_request_body=False,
-        )
-
         webhook_resource.add_method(
             "POST",
             webhook_integration,
-            request_validator=request_validator,
-            request_parameters={"method.request.header.Authorization": True},
+            authorizer=service_now_api_gateway_token_authorizer
         )
         # OPTIONS method is automatically added by CORS configuration, no need to add it manually
 
         # Grant API Gateway permission to invoke the Lambda function
         service_now_notifications_handler.grant_invoke(
             aws_iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
+        
+        # Add suppression for authorizer role
+        NagSuppressions.add_resource_suppressions(
+            service_now_api_gateway_authorizer_role,
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "Wildcard resources are required for CloudWatch Logs permissions",
+                    "applies_to": ["Resource::arn:*:logs:*:*:*"]
+                }
+            ],
+            True
         )
         
         # Add suppressions for IAM5 findings related to wildcard resources
@@ -512,25 +560,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
             ],
             True,
         )
-
-        # Add a specific rule for Service Now notification events
-        service_now_notifications_rule = aws_events.Rule(
-            self,
-            "ServiceNowNotificationsRule",
-            description="Rule to capture events from Service Now notifications handler",
-            event_pattern=aws_events.EventPattern(source=[SERVICE_NOW_EVENT_SOURCE]),
-            event_bus=event_bus,
-        )
-
-        # Use the same log group as the event bus logger
-        service_now_notifications_target = aws_events_targets.CloudWatchLogGroup(
-            log_group=event_bus_logger.log_group
-        )
-        service_now_notifications_rule.add_target(service_now_notifications_target)
-
-        # Grant specific DynamoDB permissions instead of full access
-        table.grant_read_write_data(service_now_notifications_handler)
-
+        
         """
         Custom Lambda resource for creating ServiceNow resources (Business Rule and Outbound REST API). These Service Now resources will automate the event processing for Incident related updates in AWS Security IR
         """
