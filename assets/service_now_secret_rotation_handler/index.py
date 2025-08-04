@@ -241,6 +241,14 @@ def handler(event, context):
             )
             raise
         
+        # Move AWSPENDING to AWSCURRENT
+        secrets_client.update_secret_version_stage(
+            SecretId=secret_arn,
+            VersionStage="AWSCURRENT",
+            ClientRequestToken=token,
+            RemoveFromVersionId=secrets_client.describe_secret(SecretId=secret_arn)['VersionIdsToStages']
+        )
+        
     elif step == "setSecret":
         # No external service to update for this token
         pass
@@ -250,7 +258,7 @@ def handler(event, context):
         pass
         
     elif step == "finishSecret":
-        # Move AWSPENDING to AWSCURRENT
+        # This is for validation and adds an extra layer of error handling i.e. move AWSPENDING to AWSCURRENT if not already at the "createSecret" step.
         secrets_client.update_secret_version_stage(
             SecretId=secret_arn,
             VersionStage="AWSCURRENT",
@@ -259,30 +267,3 @@ def handler(event, context):
         )
         
     return {"statusCode": 200}
-
-
-
-
-<record_update table="sys_rest_message_fn_headers" field="rest_message_function" query="rest_message_function=c0e6d1e9c383a210fca5b2ddd40131e8^ORDERBYname"><record sys_id="852680eec3cf2a10fca5b2ddd4013124" operation="add"><field name="name" modified="true" value_set="true" dsp_set="false"><value>basic_auth_password</value></field><field name="value" modified="true" value_set="false" dsp_set="true"><value></value><display_value>test</display_value></field><field name="rest_message_function" modified="false" value_set="true" dsp_set="false"><value>c0e6d1e9c383a210fca5b2ddd40131e8</value></field></record></record_update>
-
-<record_update table="sys_rest_message_fn_param_defs" field="rest_message_function" query="rest_message_function=c0e6d1e9c383a210fca5b2ddd40131e8^ORDERBYorder"/>
-
-
-rest_message_post_function_headers_response = requests.post(
-                     f"{base_url}/api/now/table/sys_rest_message_fn_headers",
-                     json=rest_message_post_function_headers_payload,
-                     headers=headers,
-                     timeout=30,
-             )
-
-headers = {
-                 "Authorization": f"Basic {auth}",
-                 "Content-Type": request_content,
-                 "Accept": request_content,
-             }
-
-rest_message_post_function_headers_payload = { 
-                     "rest_message_function": f"{outbound_rest_message_request_function_name}",
-                     "name": "Authorization",
-                     "value": "Bearer test"
-             }
