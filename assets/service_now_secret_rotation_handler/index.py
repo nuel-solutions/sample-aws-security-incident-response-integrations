@@ -228,7 +228,18 @@ def handler(event, context):
             service_now_instance_id, service_now_username, service_now_password_param_name
         )
         
-        service_now_api_service._update_outbound_rest_message_request_function_headers(service_now_resource_prefix, new_token)
+        try:
+            service_now_api_service._update_outbound_rest_message_request_function_headers(service_now_resource_prefix, new_token)
+        except Exception as e:
+            logger.error(f"Failed to update ServiceNow headers: {str(e)}")
+            # Clean up the AWSPENDING version if ServiceNow update fails
+            secrets_client.update_secret_version_stage(
+                SecretId=secret_arn,
+                VersionStage="AWSPENDING",
+                ClientRequestToken=token,
+                RemoveFromVersionId=token
+            )
+            raise
         
     elif step == "setSecret":
         # No external service to update for this token

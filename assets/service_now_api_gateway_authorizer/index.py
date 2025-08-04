@@ -24,21 +24,20 @@ def handler(event, context):
         api_auth_secret_arn = os.environ.get('API_AUTH_SECRET')
         if not api_auth_secret_arn:
             logger.error("API_AUTH_SECRET environment variable not set")
-            raise Exception('Unauthorized')
-        
-        try:
-            response = secrets_client.get_secret_value(SecretId=api_auth_secret_arn)
-            secret_dict = json.loads(response['SecretString'])
-            expected_token = secret_dict.get('token')
-        except Exception as e:
-            logger.error(f"Failed to retrieve secret: {str(e)}")
-            raise Exception('Unauthorized')
-        
-        # Validate token
-        if token == expected_token:
-            effect = 'Allow'
-        else:
             effect = 'Deny'
+        else:
+            try:
+                response = secrets_client.get_secret_value(SecretId=api_auth_secret_arn)
+                secret_dict = json.loads(response['SecretString'])
+                expected_token = secret_dict.get('token')
+                # Validate token
+                if token == expected_token:
+                    effect = 'Allow'
+                else:
+                    effect = 'Deny'
+            except Exception as e:
+                logger.error(f"Failed to retrieve secret: {str(e)}")
+                effect = 'Deny'
         
         # Generate policy
         policy = {
@@ -59,4 +58,16 @@ def handler(event, context):
         
     except Exception as e:
         logger.error(f"Authorization failed: {str(e)}")
-        raise Exception('Unauthorized')
+        return {
+            'principalId': 'service-now',
+            'policyDocument': {
+                'Version': '2012-10-17',
+                'Statement': [
+                    {
+                        'Action': 'execute-api:Invoke',
+                        'Effect': 'Deny',
+                        'Resource': event['methodArn']
+                    }
+                ]
+            }
+        }

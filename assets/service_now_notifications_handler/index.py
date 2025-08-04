@@ -321,6 +321,7 @@ class DatabaseService:
             List of matching items
         """
         try:
+            # TODO: Use GSIs and replace the following scan queries to use the service-now index instead (see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210189285892844?focus=true)
             response = self.table.scan(
                 FilterExpression=Attr("serviceNowIncidentId").eq(
                     service_now_incident_id
@@ -484,6 +485,14 @@ class ServiceNowService:
             Dictionary with serializable ServiceNow incident details
         """
         try:
+            attachments_list = [
+                {
+                    "filename": attachment.file_name,
+                    "content_type": attachment.content_type,
+                }
+                for attachment in service_now_incident_attachments
+            ]
+            
             incident_dict = {
                 "sys_id": service_now_incident.sys_id,
                 "number": service_now_incident.number,
@@ -514,13 +523,7 @@ class ServiceNowService:
                 "sys_tags": service_now_incident.sys_tags.get_display_value(),
                 "category": service_now_incident.subcategory.get_display_value(),
                 "subcategory": service_now_incident.subcategory.get_display_value(),
-                "attachments": [
-                    {
-                        "filename": attachment.file_name,
-                        "content_type": attachment.content_type,
-                    }
-                    for attachment in service_now_incident_attachments
-                ],
+                "attachments": attachments_list,
             }
             return incident_dict
         except Exception as e:
@@ -600,15 +603,12 @@ class ServiceNowMessageProcessorService:
             # Extract the request body from API Gateway event
             body = event.get("body", "{}")
 
-            # Log the raw body for debugging
-            logger.debug(f"Raw body: {body}")
-
             # Handle base64 encoded body
             if event.get("isBase64Encoded", False):
                 import base64
 
                 body = base64.b64decode(body).decode("utf-8")
-                logger.debug(f"Decoded base64 body: {body}")
+                logger.info("Decoded base64 body")
 
             # If body is already a dict, return it as is
             if isinstance(body, dict):
@@ -858,76 +858,6 @@ class ServiceNowMessageProcessorService:
             )
             return False
 
-    # def process_automation_data(self, automation_data: Dict[str, Any], event_bus_name: str = 'default') -> bool:
-    #     """
-    #     Process the automation data
-
-    #     Args:
-    #         automation_data: The automation data to process
-    #         event_bus_name: Name of the EventBridge event bus
-
-    #     Returns:
-    #         True if processing was successful, False otherwise
-    #     """
-    #     if not automation_data:
-    #         logger.warning("No data received in ServiceNow event")
-    #         return False
-
-    #     try:
-    #         # Log the automation data (sanitized)
-    #         logger.info(f"Processing automation data: {html.escape(json.dumps(automation_data))}")
-
-    #         # Create an EventPublisherService instance
-    #         event_publisher = EventPublisherService(event_bus_name)
-
-    #         # Get ServiceNow incident ID from the automation data
-    #         service_now_incident_id = automation_data.get("IncidentId")
-    #         if not service_now_incident_id:
-    #             logger.error("No IncidentId found in automation data")
-    #             return False
-
-    #         # Get ServiceNow incident details from ServiceNow first
-    #         service_now_incident_details = self.service_now_service._get_incident_details(service_now_incident_id)
-    #         if not service_now_incident_details:
-    #             logger.error(f"Failed to get incident details for {service_now_incident_id} from ServiceNow")
-    #             return False
-
-    #         # Get ServiceNow incident details from database
-    #         service_now_incident_details_ddb = self.db_service._get_incident_details(service_now_incident_id)
-
-    #         # If incident not found in database, publish created event and update the database
-    #         if not service_now_incident_details_ddb:
-    #             logger.info(f"ServiceNow incident details for {service_now_incident_id} not found in database")
-    #             # Update the database with the ServiceNow incident ID and details
-    #             try:
-    #                 logger.info(f"Publishing IncidentCreatedEvent for ServiceNow incident {service_now_incident_id}")
-    #                 event_publisher._publish_event(IncidentCreatedEvent(service_now_incident_details))
-    #                 # Use a composite key pattern to maintain data model integrity
-    #                 logger.info(f"Adding ServiceNow incident details for {service_now_incident_id} to database")
-    #                 self.db_service._add_incident_details(service_now_incident_id, service_now_incident_details)
-    #                 return True
-    #             except Exception as e:
-    #                 logger.error(f"Error updating database with ServiceNow incident details: {str(e)}")
-    #                 return False
-
-    #         logger.info(f"ServiceNow incident details for {service_now_incident_id} found in database. Comparing it with the incident details from ServiceNow")
-    #         # Compare incident details to detect changes
-    #         service_now_details_json = json.dumps(service_now_incident_details)
-    #         if json.loads(service_now_details_json) != json.loads(service_now_incident_details_ddb):
-    #             logger.info(f"ServiceNow incident details for {service_now_incident_id} have changed. Publishing IncidentUpdatedEvent")
-    #             event_publisher._publish_event(IncidentUpdatedEvent(service_now_incident_details))
-    #             logger.info(f"Storing the updated incident details for ServiceNow incident {service_now_incident_id} in the database")
-    #             self.db_service._update_incident_details(service_now_incident_id, service_now_incident_details)
-    #             return True
-
-    #         logger.info(f"No changes detected for incident {service_now_incident_id}")
-    #         return True
-
-    #     except Exception as e:
-    #         logger.error(f"Error processing automation data: {str(e)}")
-    #         logger.error(traceback.format_exc())
-    #         return False
-
 
 class ResponseBuilderService:
     """Class to handle response building"""
@@ -991,7 +921,7 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     """
     try:
         # Log incoming event with more details for debugging
-        logger.info(f"Received event: {json.dumps(event)}")
+        logger.info("Received event from Service Now")
 
         # Handle OPTIONS request for CORS
         if event.get("httpMethod") == "OPTIONS":
@@ -1062,11 +992,11 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
 
         # Parse the request body
         payload = processor._parse_message(body)
-        logger.info(f"Parsed event payload: {json.dumps(payload)}")
+        logger.info("Parsed event payload")
 
         # Check if payload has required fields
         if not payload or "incident_number" not in payload:
-            logger.error(f"Missing required fields in payload: {json.dumps(payload)}")
+            logger.error("Missing required fields in payload")
             return ResponseBuilderService._build_error_response(
                 "Missing required fields in payload"
             )
