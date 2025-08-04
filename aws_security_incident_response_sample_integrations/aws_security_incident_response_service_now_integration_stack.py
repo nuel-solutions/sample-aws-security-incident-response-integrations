@@ -321,7 +321,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
         )
 
         # Create the secret with rotation
-        secret_template = '{"token": ""}'  # nosec B106
+        secret_template = '{"token": ""}'  # nosec B105
         api_auth_secret = aws_secretsmanager.Secret(
             self,
             "ApiAuthSecret",
