@@ -388,15 +388,27 @@ class DatabaseService:
             attr_name = "serviceNowIncidentId"
         try:
             response = self.__ddb_table.scan(
-                FilterExpression=Attr(attr_name).eq(record_id), Limit=1000
+                FilterExpression=Attr(attr_name).eq(record_id)
             )
-            if response["Items"] == []:
+            items = response["Items"]
+            
+            # Handle pagination if there are more items
+            while "LastEvaluatedKey" in response:
+                response = self.table.scan(
+                    FilterExpression=Attr(attr_name).eq(
+                        record_id
+                    ),
+                    ExclusiveStartKey=response["LastEvaluatedKey"],
+                )
+                items.extend(response["Items"])
+            
+            if not items:
                 logger.info(
                     f"Security IR case for {event_source} issue/incident {record_id} not found in database"
                 )
                 security_ir_case_id = None
             else:
-                security_ir_case_id = response["Items"][0]["PK"]
+                security_ir_case_id = items[0]["PK"]
                 security_ir_case_id = re.search(
                     r"Case#(\d+)", security_ir_case_id
                 ).group(1)

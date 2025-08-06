@@ -218,7 +218,7 @@ def convert_service_now_comments_to_list(comments: str) -> List[str]:
     lines = comments.splitlines() # Split the paragraph into individual lines
     
     for i, line in enumerate(lines):
-        if phrases_to_convert in line:
+        if any(phrase in line for phrase in phrases_to_convert):
             # Check if there is a next line to extract
             if i + 1 < len(lines):
                 extracted_lines.append(lines[i + 1].strip()) # Add the next line, stripped of leading/trailing whitespace
