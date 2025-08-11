@@ -34,12 +34,12 @@ class ServiceNowClient:
 
     def __init__(self, instance_id, username, password_param_name):
         """
-        Initialize the ServiceNow client
+        Initialize the ServiceNow client.
 
         Args:
-            instance_id: ServiceNow instance ID
-            username: ServiceNow username
-            password: ServiceNow password
+            instance_id (str): ServiceNow instance ID
+            username (str): ServiceNow username
+            password_param_name (str): SSM parameter name containing ServiceNow password
         """
         self.instance_id = instance_id
         self.username = username
@@ -48,10 +48,10 @@ class ServiceNowClient:
 
     def __create_client(self) -> Optional[SnowClient]:
         """
-        Create a ServiceNow client instance
+        Create a ServiceNow client instance.
 
         Returns:
-            PySNCClient or None if creation fails
+            Optional[SnowClient]: PySNC ServiceNow client or None if creation fails
         """
         try:
             # Use provided parameters or fetch from SSM
@@ -74,10 +74,10 @@ class ServiceNowClient:
 
     def __get_password(self) -> Optional[str]:
         """
-        Fetch the ServiceNow password from SSM Parameter Store
+        Fetch the ServiceNow password from SSM Parameter Store.
 
         Returns:
-            Password or None if retrieval fails
+            Optional[str]: Password or None if retrieval fails
         """
         try:
             if not self.password_param_name:
@@ -95,10 +95,13 @@ class ServiceNowClient:
 
     def __get_glide_record(self, record_type) -> GlideRecord:
         """
-        Prepare a Glide Record using ServiceNowClient for querying
+        Prepare a Glide Record using ServiceNowClient for querying.
+
+        Args:
+            record_type (str): Type of ServiceNow record (e.g., 'incident')
 
         Returns:
-            GlideRecord or None if retrieval fails
+            GlideRecord: GlideRecord instance or None if retrieval fails
         """
         try:
             glide_record = self.client.GlideRecord(record_type)
@@ -111,38 +114,45 @@ class ServiceNowClient:
         self, glide_record: GlideRecord, fields: Dict[str, Any]
     ):
         """
-        Prepare ServiceNow Glide Record for incident creation
+        Prepare ServiceNow Glide Record for incident creation.
 
         Args:
-            glide_record: ServiceNow Glide Record
-            fields: ServiceNow mapped fields
+            glide_record (GlideRecord): ServiceNow Glide Record
+            fields (Dict[str, Any]): ServiceNow mapped fields
 
         Returns:
-            Glide record for Incident creation with added fields
+            GlideRecord: Glide record for Incident creation with added fields
         """
-        glide_record.short_description = fields["short_description"]
-        glide_record.description = fields["description"]
-        glide_record.state = fields["state"]
-        glide_record.impact = fields["impact"]
-        glide_record.priority = fields["priority"]
-        glide_record.incident_state = fields["incident_state"]
-        glide_record.urgency = fields["urgency"]
-        glide_record.severity = fields["severity"]
-        glide_record.comments_and_work_notes = fields["comments_and_work_notes"]
-        glide_record.category = fields["category"]
-        glide_record.subcategory = fields["subcategory"]
+        # Validate that fields is a dictionary
+        if not isinstance(fields, dict):
+            logger.error(
+                f"Fields parameter must be a dictionary, got {type(fields)}: {fields}"
+            )
+            return glide_record
+
+        glide_record.short_description = fields.get("short_description", "")
+        glide_record.description = fields.get("description", "")
+        glide_record.state = fields.get("state", "1")
+        glide_record.impact = fields.get("impact", "2")
+        glide_record.priority = fields.get("priority", "3")
+        glide_record.incident_state = fields.get("incident_state", "1")
+        glide_record.urgency = fields.get("urgency", "2")
+        glide_record.severity = fields.get("severity", "1")
+        glide_record.comments_and_work_notes = fields.get("comments_and_work_notes", "")
+        glide_record.category = fields.get("category", "inquiry")
+        glide_record.subcategory = fields.get("subcategory", "internal application")
 
         return glide_record
 
     def get_incident(self, incident_number: str) -> GlideRecord:
         """
-        Get a ServiceNow incident by incident_number
+        Get a ServiceNow incident by incident_number.
 
         Args:
-            incident_number: The ServiceNow incident_number
+            incident_number (str): The ServiceNow incident number
 
         Returns:
-            Incident or None if retrieval fails
+            GlideRecord: Incident record or None if retrieval fails
         """
         try:
             glide_record = self.__get_glide_record("incident")
@@ -161,13 +171,13 @@ class ServiceNowClient:
 
     def get_incident_attachments(self, glide_record: GlideRecord) -> List[Attachment]:
         """
-        Get attachments for a ServiceNow incident
+        Get attachments for a ServiceNow incident.
 
         Args:
-            glide_record: ServiceNow Glide Record
+            glide_record (GlideRecord): ServiceNow Glide Record
 
         Returns:
-            List of attachments or None if retrieval fails
+            List[Attachment]: List of attachments or None if retrieval fails
         """
         try:
             attachments = []
@@ -182,13 +192,13 @@ class ServiceNowClient:
 
     def create_incident(self, fields: Dict[str, Any]) -> Optional[Any]:
         """
-        Create a new ServiceNow incident
+        Create a new ServiceNow incident.
 
         Args:
-            fields: Dictionary of incident fields
+            fields (Dict[str, Any]): Dictionary of incident fields
 
         Returns:
-            Created ServiceNow incident or None if creation fails
+            Optional[Any]: Created ServiceNow incident number or None if creation fails
         """
         try:
             glide_record = self.__get_glide_record("incident")
@@ -207,16 +217,23 @@ class ServiceNowClient:
 
     def update_incident(self, incident_number, fields: Dict[str, Any]) -> Optional[Any]:
         """
-        Update an existing ServiceNow incident
+        Update an existing ServiceNow incident.
 
         Args:
-            incident_number: Incident number in ServiceNow to be updated
-            fields: Dictionary of incident fields
+            incident_number (str): Incident number in ServiceNow to be updated
+            fields (Dict[str, Any]): Dictionary of incident fields
 
         Returns:
-            Updated ServiceNow incident or None if update fails
+            Optional[Any]: Updated ServiceNow incident record or None if update fails
         """
         try:
+            # Validate that fields is a dictionary
+            if not isinstance(fields, dict):
+                logger.error(
+                    f"Fields parameter must be a dictionary, got {type(fields)}: {fields}"
+                )
+                return None
+
             glide_record = self.__get_glide_record("incident")
             glide_record.add_query("number", incident_number)
             glide_record.query()
@@ -230,4 +247,27 @@ class ServiceNowClient:
                 return None
         except Exception as e:
             logger.error(f"Incident update failed with error: {e}")
+            return None
+
+    def upload_incident_attachment(
+        self, incident_number: str, attachment_path: str
+    ) -> Optional[Any]:
+        """Upload an attachment to a ServiceNow incident.
+
+        Args:
+            incident_number (str): The ServiceNow incident number
+            attachment_path (str): Path to the attachment file
+
+        Returns:
+            Optional[Any]: Upload result or None if upload fails
+        """
+        try:
+            # Get a resource object for the incident table
+            incidents = self.client.resource(api_path="/table/incident")
+            # Fetch the incident record by number
+            incident = incidents.get(query={"number": incident_number})
+            incident.upload(file_path=attachment_path)
+            logger.info(f"Uploaded attachment to ServiceNow incident {incident_number}")
+        except Exception as e:
+            logger.error(f"Attachment upload failed with error: {e}")
             return None
