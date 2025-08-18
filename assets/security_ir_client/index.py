@@ -129,10 +129,42 @@ def process_service_now_event(service_now_incident: dict, event_source: str) -> 
         )
 
         if security_ir_case_id:
-            security_ir_fields["caseId"] = security_ir_case_id
-            _ = incident_service.update_incident_details_in_sir(
-                security_ir_case=security_ir_fields
-            )
+            # Get current Security IR case details to compare for changes
+            current_sir_case = incident_service.get_incident_from_sir(security_ir_case_id)
+            
+            if current_sir_case:
+                # Check if there are actual changes before updating
+                needs_update = False
+                
+                # Compare title
+                if current_sir_case.get("title") != security_ir_fields.get("title"):
+                    needs_update = True
+                    logger.info(f"Title changed: {current_sir_case.get('title')} -> {security_ir_fields.get('title')}")
+                
+                # Compare description
+                if current_sir_case.get("description") != security_ir_fields.get("description"):
+                    needs_update = True
+                    logger.info(f"Description changed: {current_sir_case.get("description")}")
+                
+                # Compare status
+                if current_sir_case.get("caseStatus") != security_ir_fields.get("caseStatus"):
+                    needs_update = True
+                    logger.info(f"Status changed: {current_sir_case.get('caseStatus')} -> {security_ir_fields.get('caseStatus')}")
+                
+                if needs_update:
+                    security_ir_fields["caseId"] = security_ir_case_id
+                    _ = incident_service.update_incident_details_in_sir(
+                        security_ir_case=security_ir_fields
+                    )
+                    logger.info(f"Updated Security IR case {security_ir_case_id} due to changes")
+                else:
+                    logger.info(f"No changes detected for Security IR case {security_ir_case_id}, skipping update")
+            else:
+                # If we can't get current case details, proceed with update
+                security_ir_fields["caseId"] = security_ir_case_id
+                _ = incident_service.update_incident_details_in_sir(
+                    security_ir_case=security_ir_fields
+                )
         else:
             # Create case in Security IR since no record entry exists for the ServiceNow incident in the database
             security_ir_case_id = incident_service.create_incident_in_sir(
@@ -222,6 +254,9 @@ def process_service_now_event(service_now_incident: dict, event_source: str) -> 
         service_now_incident_attachment["filename"]
         for service_now_incident_attachment in service_now_incident_attachments
     ]
+
+    # Extract comment bodies from sir_case_comments for attachment checking
+    sir_comment_bodies = [comment["body"] for comment in sir_case_comments["items"]]
 
     # determine whether this is a new attachment before adding
     for service_now_incident_attachment_name in service_now_incident_filenames:

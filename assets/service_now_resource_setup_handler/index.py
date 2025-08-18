@@ -29,17 +29,16 @@ class ParameterService:
     """Class to handle parameter operations"""
 
     def __init__(self):
-        """Initialize the parameter service"""
+        """Initialize the parameter service."""
 
     def get_parameter(self, parameter_name: str) -> Optional[str]:
-        """
-        Get a parameter from SSM Parameter Store
+        """Get a parameter from SSM Parameter Store.
 
         Args:
-            parameter_name: The name of the parameter to retrieve
+            parameter_name (str): The name of the parameter to retrieve
 
         Returns:
-            Parameter value or None if retrieval fails
+            Optional[str]: Parameter value or None if retrieval fails
         """
         try:
             response = ssm_client.get_parameter(
@@ -56,17 +55,16 @@ class SecretsManagerService:
     """Class to handle Secrets Manager operations"""
 
     def __init__(self):
-        """Initialize the secrets manager service"""
+        """Initialize the secrets manager service."""
 
     def get_secret_value(self, secret_arn: str) -> Optional[str]:
-        """
-        Get a secret value from AWS Secrets Manager
+        """Get a secret value from AWS Secrets Manager.
 
         Args:
-            secret_arn: The ARN of the secret to retrieve
+            secret_arn (str): The ARN of the secret to retrieve
 
         Returns:
-            Secret token value or None if retrieval fails
+            Optional[str]: Secret token value or None if retrieval fails
         """
         try:
             response = secrets_client.get_secret_value(SecretId=secret_arn)
@@ -122,11 +120,10 @@ class ServiceNowApiService:
             return None
 
     def __get_request_headers(self):
-        """
-        Get headers for ServiceNow API requests.
+        """Get headers for ServiceNow API requests.
 
         Returns:
-            dict: HTTP headers with Basic authentication or None if error
+            Optional[Dict[str, str]]: HTTP headers with Basic authentication or None if error
         """
         try:
             password = self.__get_password(self.password_param_name)
@@ -141,11 +138,10 @@ class ServiceNowApiService:
             return None
 
     def __get_request_base_url(self):
-        """
-        Get base URL for ServiceNow API requests.
+        """Get base URL for ServiceNow API requests.
 
         Returns:
-            str: ServiceNow instance base URL or None if error
+            Optional[str]: ServiceNow instance base URL or None if error
         """
         try:
             return f"https://{self.instance_id}.service-now.com"
@@ -154,14 +150,13 @@ class ServiceNowApiService:
             return None
 
     def __get_json_keys_list(self, json_string):
-        """
-        Get list of keys from a JSON string.
+        """Get list of keys from a JSON string.
 
         Args:
             json_string (str): JSON string to parse
 
         Returns:
-            list: List of keys from JSON object or None if error
+            Optional[List[str]]: List of keys from JSON object or None if error
         """
         try:
             json_object = json.loads(json_string)
@@ -177,11 +172,10 @@ class ServiceNowApiService:
         request_content,
         outbound_rest_message_request_function_sys_id,
     ):
-        """
-        Add parameters to HTTP request function for Outbound REST Message resource in ServiceNow.
+        """Add parameters to HTTP request function for Outbound REST Message resource in ServiceNow.
 
         Args:
-            headers (dict): HTTP headers for ServiceNow API requests
+            headers (Dict[str, str]): HTTP headers for ServiceNow API requests
             base_url (str): ServiceNow instance base URL
             request_content (str): JSON string containing request parameters
             outbound_rest_message_request_function_sys_id (str): System ID of the REST message function
@@ -229,11 +223,10 @@ class ServiceNowApiService:
         outbound_rest_message_request_function_name,
         api_auth_secret_arn,
     ):
-        """
-        Create/Update HTTP request headers for the Outbound REST Message function in ServiceNow.
+        """Create/Update HTTP request headers for the Outbound REST Message function in ServiceNow.
 
         Args:
-            headers (dict): HTTP headers for ServiceNow API requests
+            headers (Dict[str, str]): HTTP headers for ServiceNow API requests
             base_url (str): ServiceNow instance base URL
             outbound_rest_message_request_function_name (str): Name of the REST message function
             api_auth_secret_arn (str): ARN of the API auth secret in Secrets Manager
@@ -288,11 +281,10 @@ class ServiceNowApiService:
         outbound_rest_message_request_function_name,
         api_auth_secret_arn,
     ):
-        """
-        Create HTTP request function for the Outbound REST Message resource in ServiceNow.
+        """Create HTTP request function for the Outbound REST Message resource in ServiceNow.
 
         Args:
-            headers (dict): HTTP headers for ServiceNow API requests
+            headers (Dict[str, str]): HTTP headers for ServiceNow API requests
             base_url (str): ServiceNow instance base URL
             request_type (str): HTTP method (e.g., 'POST')
             request_content (str): JSON string containing request body template
@@ -301,7 +293,7 @@ class ServiceNowApiService:
             api_auth_secret_arn (str): ARN of the API auth secret in Secrets Manager
 
         Returns:
-            str: System ID of the created function or None if error
+            Optional[str]: System ID of the created function or None if error
         """
         try:
             logger.info(
@@ -347,8 +339,7 @@ class ServiceNowApiService:
     def _create_outbound_rest_message(
         self, webhook_url, resource_prefix, api_auth_secret_arn
     ):
-        """
-        Create Outbound REST Message for publishing Incident events to the integration solution.
+        """Create Outbound REST Message for publishing Incident events to the integration solution.
 
         Args:
             webhook_url (str): URL of the webhook endpoint
@@ -356,7 +347,7 @@ class ServiceNowApiService:
             api_auth_secret_arn (str): ARN of the API auth secret in Secrets Manager
 
         Returns:
-            tuple: (outbound_rest_message_name, outbound_rest_message_request_function_name) or None if error
+            Optional[Tuple[str, str]]: (outbound_rest_message_name, outbound_rest_message_request_function_name) or None if error
         """
         try:
             logger.info(
@@ -437,8 +428,7 @@ class ServiceNowApiService:
         outbound_rest_message_request_function_name,
         resource_prefix,
     ):
-        """
-        Create Business Rule to trigger Incident events.
+        """Create Business Rule to trigger Incident events.
 
         Args:
             outbound_rest_message_name (str): Name of the outbound REST message
@@ -446,7 +436,7 @@ class ServiceNowApiService:
             resource_prefix (str): Prefix for ServiceNow resource naming
 
         Returns:
-            requests.Response: Response from ServiceNow API or None if error
+            Optional[requests.Response]: Response from ServiceNow API or None if error
         """
         try:
             logger.info(

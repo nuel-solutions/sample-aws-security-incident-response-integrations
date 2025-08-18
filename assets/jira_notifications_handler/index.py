@@ -247,7 +247,7 @@ class DatabaseService:
             Optional[str]: Jira issue details or None if not found
         """
         try:
-            items = self.scan_for_issue_id(jira_issue_id)
+            items = self.get_issue_by_id(jira_issue_id)
             if not items:
                 logger.info(f"Issue details for {jira_issue_id} not found in database.")
                 return None
@@ -259,7 +259,7 @@ class DatabaseService:
             logger.error(f"Error retrieving details from the DynamoDB table: {e}")
             return None
 
-    def scan_for_issue_id(self, jira_issue_id: str) -> List[Dict[str, Any]]:
+    def get_issue_by_id(self, jira_issue_id: str) -> List[Dict[str, Any]]:
         """Scan DynamoDB table for Jira issue ID.
 
         Args:

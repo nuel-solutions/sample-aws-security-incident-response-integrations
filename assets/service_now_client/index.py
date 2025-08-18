@@ -8,7 +8,7 @@ import os
 import re
 import logging
 import requests
-from typing import Dict, Optional, Any, Tuple
+from typing import Dict, Optional, Any, Tuple, List
 import boto3
 from botocore.exceptions import ClientError
 
@@ -35,18 +35,18 @@ except ImportError:
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# # Configure logging
-# logger = logging.getLogger()
+# Configure logging
+logger = logging.getLogger()
 
-# # Get log level from environment variable
-# log_level = os.environ.get("LOG_LEVEL", "error").lower()
-# if log_level == "debug":
-#     logger.setLevel(logging.DEBUG)
-# elif log_level == "info":
-#     logger.setLevel(logging.INFO)
-# else:
-#     # Default to ERROR level
-#     logger.setLevel(logging.ERROR)
+# Get log level from environment variable
+log_level = os.environ.get("LOG_LEVEL", "error").lower()
+if log_level == "debug":
+    logger.setLevel(logging.DEBUG)
+elif log_level == "info":
+    logger.setLevel(logging.INFO)
+else:
+    # Default to ERROR level
+    logger.setLevel(logging.ERROR)
 
 # Initialize AWS clients
 security_incident_response_client = boto3.client("security-ir")
@@ -277,6 +277,33 @@ class ServiceNowService:
         except Exception as e:
             logger.error(f"Error updating incident details from ServiceNow: {str(e)}")
             return None
+    
+    def add_incident_comment(
+        self, service_now_incident_number: str, service_now_incident_comment: str
+    ) -> Optional[Any]:
+        """Update incident in ServiceNow.
+
+        Args:
+            service_now_incident_number (str): Incident number in ServiceNow to be updated
+            service_now_fields (Dict[str, Any]): Dictionary of incident fields
+
+        Returns:
+            Optional[Any]: Updated ServiceNow incident or None if update fails
+        """
+        try:
+            service_now_incident = self.service_now_client.add_incident_comment(
+                service_now_incident_number, service_now_incident_comment
+            )
+            if not service_now_incident:
+                logger.error(f"Failed to add comment {service_now_incident_comment} to incident {service_now_incident_number} in ServiceNow")
+                return None
+            logger.info(
+                f"Added comment {service_now_incident_comment} to incident {service_now_incident_number}"
+            )
+            return service_now_incident
+        except Exception as e:
+            logger.error(f"Error adding {service_now_incident_comment} comment to incident {service_now_incident_number} in ServiceNow: {str(e)}")
+            return None
 
     def extract_incident_details(
         self, service_now_incident: Any, service_now_incident_attachments: Any
@@ -315,7 +342,6 @@ class ServiceNowService:
                 "active": service_now_incident.active.get_display_value(),
                 "priority": service_now_incident.priority.get_display_value(),
                 "caller_id": service_now_incident.caller_id.get_display_value(),
-                "incident_state": service_now_incident.incident_state.get_display_value(),
                 "urgency": service_now_incident.urgency.get_display_value(),
                 "severity": service_now_incident.severity.get_display_value(),
                 "comments": service_now_incident.comments.get_display_value(),
@@ -417,6 +443,13 @@ class IncidentService:
         """
         # Map fields from SIR to ServiceNow
         service_now_fields = map_sir_fields_to_service_now(ir_case_detail)
+        
+        # Map Security IR case status to ServiceNow incident state
+        sir_case_status = ir_case_detail.get("caseStatus")
+        if sir_case_status:
+            service_now_status, status_comment = map_case_status(sir_case_status)
+            if service_now_status:
+                service_now_fields["state"] = service_now_status
 
         return service_now_fields
 
@@ -457,30 +490,8 @@ class IncidentService:
                 ir_case_detail, ir_case_id
             )
 
-            # Ensure base fields are set
-            # Map Security IR case status to ServiceNow incident
-            service_now_status = None
-            status_comment = None
-            if sir_case_status:
-                service_now_status, status_comment = map_case_status(sir_case_status)
-
-            if service_now_status:
-                service_now_fields["state"] = service_now_status
-
-            if status_comment:
-                # If the status of Security IR case does not map to any status in ServiceNow incident, add the status as a comment for user visibility
-                comments_list.append(status_comment)
-
-            # Map Security IR case comments to ServiceNow incident
-            if sir_case_comments:
-                comments_to_be_added = map_sir_case_comments_to_service_now_incident(
-                    sir_case_comments, service_now_comments
-                )
-                if comments_to_be_added:
-                    comments_list.extend(comments_to_be_added)
-
-            # Get short description mapping
-            service_now_short_description = f"{ir_case_detail.get('title', 'SIR Case')} - AWS Security Incident Response Case#{ir_case_id}"
+            # # Get short description mapping
+            # service_now_short_description = f"{ir_case_detail.get('title', 'SIR Case')} - AWS Security Incident Response Case#{ir_case_id}"
 
             # Get unmapped fields comments
             unmapped_sir_fields_comment = (
@@ -492,38 +503,81 @@ class IncidentService:
                 service_now_incident_id = self.handle_case_creation(
                     ir_case_id,
                     service_now_fields,
-                    comments_list,
-                    service_now_short_description,
-                    unmapped_sir_fields_comment,
+                    # service_now_short_description,
                 )
+                # Only add unmapped SIR fields comment to the ServiceNow comment_list for the first time when Incident is created
+                comments_list.append(unmapped_sir_fields_comment)
             elif ir_event_type == "CaseUpdated":
-                service_now_incident_id = self.handle_case_update(
+                service_now_incident_id, incident_created = self.handle_case_update(
                     ir_case_detail,
                     ir_case_id,
                     service_now_fields,
-                    comments_list,
-                    unmapped_sir_fields_comment,
-                    service_now_short_description,
+                    # service_now_short_description,
                 )
+                # If incident did not exist, and needed to be created for CaseUpdated event, add the unmapped fields comment to the list
+                if incident_created:
+                    comments_list.append(unmapped_sir_fields_comment)
             else:
                 logger.warning(f"Unhandled event type: {ir_event_type}")
                 return None
 
+            # Get ServiceNow incident latest details before further updates
+            service_now_incident = self.service_now_service.get_incident(
+                service_now_incident_id
+            )
+
+            # Map Security IR case comments to ServiceNow incident
+            service_now_incident_comments = service_now_incident[
+                "comments_and_work_notes"
+            ]
+            if sir_case_comments:
+                comments_to_be_added = map_sir_case_comments_to_service_now_incident(
+                    sir_case_comments, service_now_incident_comments
+                )
+                if comments_to_be_added:
+                    comments_list.extend(comments_to_be_added)
+            for comment in comments_list:
+                logger.info("Updating ServiceNow comment")
+                # Update Service Now incident with the latest comments
+                self.service_now_service.add_incident_comment(
+                    service_now_incident_id, comment
+                )
+
             # Map Security IR case attachments to ServiceNow incident
+            service_now_incident_attachments = service_now_incident["attachments"]
             if sir_case_attachments:
                 logger.info(
                     "Uploading Security IR case attachments to ServiceNow incident"
                 )
                 for sir_case_attachment in sir_case_attachments:
-                    logger.info(f"Attachment to be uploaded: {ir_attachment}")
+                    logger.info(f"Attachment to be uploaded: {sir_case_attachment}")
                     sir_case_attachment_id = sir_case_attachment["attachmentId"]
                     sir_case_attachment_name = sir_case_attachment["fileName"]
-                    self.upload_attachment_to_service_now_incident(
-                        service_now_incident_id,
-                        ir_case_id,
-                        sir_case_attachment_id,
-                        sir_case_attachment_name,
-                    )
+                    if not self.check_if_attachment_exists_in_service_now_incident(
+                        service_now_incident_attachments, sir_case_attachment_name
+                    ):
+                        self.upload_attachment_to_service_now_incident(
+                            service_now_incident_id,
+                            ir_case_id,
+                            sir_case_attachment_id,
+                            sir_case_attachment_name,
+                        )
+
+            # Get ServiceNow incident latest details post all the updates and store it in DDB
+            service_now_incident_latest = self.service_now_service.get_incident(
+                service_now_incident_id
+            )
+            if not service_now_incident_latest:
+                return service_now_incident_id
+
+            # Update ServiceNow incident latest details in database
+            self.db_service.update_incident_details(
+                ir_case_id, service_now_incident_id, service_now_incident_latest
+            )
+
+            logger.info(
+                f"Updated ServiceNow incident {service_now_incident_id} for existing IR case {ir_case_id}"
+            )
 
             return service_now_incident_id
 
@@ -535,9 +589,7 @@ class IncidentService:
         self,
         ir_case_id: str,
         service_now_fields: Dict[str, Any],
-        comments_list: List[str],
-        short_description: str,
-        unmapped_sir_fields_comment: str,
+        # short_description: str,
     ) -> Optional[str]:
         """Handle the creation of a new IR case.
 
@@ -550,38 +602,19 @@ class IncidentService:
         Returns:
             Optional[str]: ServiceNow incident ID or None if creation fails
         """
-        # Ensure base fields are set for incident creation in ServiceNow
-        service_now_fields["short_description"] = short_description
+        # # Ensure base fields are set for incident creation in ServiceNow
+        # service_now_fields["short_description"] = short_description
+
         # Create new incident in ServiceNow
         service_now_incident_number = self.service_now_service.create_incident(
             service_now_fields
         )
+
         if not service_now_incident_number:
             return None
 
-        # Update comments in the newly created incident
-        # Add unmapped fields to the comment list if they exist
-        if unmapped_sir_fields_comment:
-            comments_list.append(unmapped_sir_fields_comment)
-
-        if comments_list:
-            for comment in comments_list:
-                service_now_fields["work_notes"] = comment
-                self.service_now_service.update_incident(
-                    service_now_incident_number, service_now_fields
-                )
-
         # Create mapping between Security IR case id and ServiceNow incident id in the database
         self.db_service.update_mapping(ir_case_id, service_now_incident_number)
-
-        # Get incident details after creation and update database
-        service_now_incident = self.service_now_service.get_incident(
-            service_now_incident_number
-        )
-        if service_now_incident:
-            self.db_service.update_incident_details(
-                ir_case_id, service_now_incident_number, service_now_incident
-            )
 
         logger.info(
             f"Created ServiceNow incident {service_now_incident_number} for new IR case {ir_case_id}"
@@ -593,10 +626,8 @@ class IncidentService:
         ir_case_detail: Dict[str, Any],
         ir_case_id: str,
         service_now_fields: Dict[str, Any],
-        comments_list: List[str],
-        unmapped_fields_comment: Optional[str],
-        service_now_short_description: Optional[str],
-    ) -> Optional[str]:
+        # service_now_short_description: Optional[str],
+    ):
         """Handle the update of an existing IR case.
 
         Args:
@@ -609,6 +640,9 @@ class IncidentService:
         Returns:
             Optional[str]: ServiceNow incident ID or None if update fails
         """
+        # Set incident_created flag to False. This flag will only be set to true if Incident does not already exist in DDB, and is created in ServiceNow for an IncidentUpdated event
+        incident_created = False
+
         # Get case details from database
         case_from_ddb = self.db_service.get_case(ir_case_id)
         if not case_from_ddb and "Item" not in case_from_ddb:
@@ -625,52 +659,53 @@ class IncidentService:
             logger.info(
                 f"No ServiceNow incident found for IR case {ir_case_id} in database, creating ServiceNow incident..."
             )
-            return self.handle_case_creation(
+            service_now_incident_id = self.handle_case_creation(
                 ir_case_id,
                 service_now_fields,
-                comments_list,
-                service_now_short_description,
-                unmapped_fields_comment,
+                # service_now_short_description,
             )
+            incident_created = True
         else:
             # Update existing incident in ServiceNow
             logger.info(
                 f"ServiceNow incident {service_now_incident_id} found for IR case {ir_case_id} in database, updating ServiceNow incident..."
             )
-            if comments_list:
-                for comment in comments_list:
-                    service_now_fields["work_notes"] = comment
-                    self.service_now_service.update_incident(
-                        service_now_incident_id, service_now_fields
-                    )
-            else:
-                self.service_now_service.update_incident(
-                    service_now_incident_id, service_now_fields
-                )
+            logger.info(f"Updating with fields: {service_now_fields}")
+            logger.info(f"State field value: {service_now_fields.get('state', 'NOT SET')}")
+            self.service_now_service.update_incident(
+                service_now_incident_id, service_now_fields
+            )
 
-        # Get ServiceNow incident latest details post update
-        service_now_incident = self.service_now_service.get_incident(
-            service_now_incident_id
-        )
-        if not service_now_incident:
-            return service_now_incident_id
+        return service_now_incident_id, incident_created
 
-        # Update ServiceNow incident latest details in database
-        self.db_service.update_incident_details(
-            ir_case_id, service_now_incident_id, service_now_incident
-        )
+    def check_if_attachment_exists_in_service_now_incident(
+        self, service_now_incident_attachments: List[Any], sir_case_attachment_name: str
+    ):
+        """Check if an attachment exists in a ServiceNow incident.
 
-        logger.info(
-            f"Updated ServiceNow incident {service_now_incident_id} for existing IR case {ir_case_id}"
-        )
-        return service_now_incident_id
+        Args:
+            service_now_incident_attachments (List[Any]): List of ServiceNow incident attachments
+            sir_case_attachment_name (str): Security IR case attachment name
+
+        Returns:
+            bool: True if the attachment exists, False otherwise
+        """
+        for service_now_incident_attachment in service_now_incident_attachments:
+            # Compare with the filename property of the attachment
+            attachment_filename = service_now_incident_attachment.get("filename", "")
+            if str(sir_case_attachment_name) == str(attachment_filename):
+                logger.info(f"Attachment {sir_case_attachment_name} already exists in ServiceNow incident")
+                return True
+        logger.info(f"Attachment {sir_case_attachment_name} does not exist in ServiceNow incident, will upload")
+        return False
 
     def upload_attachment_to_service_now_incident(
         self, service_now_incident_id, ir_case_id, ir_attachment_id, ir_attachment_name
     ):
-        # Upload the file to the fetched incident
-        # Replace 'path/to/your/file.txt'
+        # Check file size limit (5MB) to avoid 414 Request-URI Too Large error
+        MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
         download_path = f"/tmp/{ir_attachment_name}"
+        
         try:
             # Get presigned URL
             ir_attachment_presigned_url = (
@@ -685,12 +720,20 @@ class IncidentService:
 
             # Download object to /tmp using the presigned URL
             response = requests.get(ir_attachment_presigned_url_str)
+            
+            # Check file size before processing
+            if len(response.content) > MAX_FILE_SIZE:
+                logger.warning(f"Attachment {ir_attachment_name} ({len(response.content)} bytes) exceeds size limit. Adding comment instead.")
+                comment = f"[AWS Security IR] Large attachment '{ir_attachment_name}' ({len(response.content)} bytes) could not be uploaded due to size limits. Please download from the Security IR case."
+                self.service_now_service.add_incident_comment(service_now_incident_id, comment)
+                return
+            
             with open(download_path, "wb") as f:
                 f.write(response.content)
 
             # Upload from /tmp and add to ServiceNow issue as attachment
             self.service_now_service.service_now_client.upload_incident_attachment(
-                service_now_incident_id, download_path
+                service_now_incident_id, ir_attachment_name, download_path
             )
 
             logger.info(
@@ -701,7 +744,14 @@ class IncidentService:
             os.remove(download_path)
 
         except Exception as e:
-            logger.error(f"Error trying to download IR attachment: {e}")
+            logger.error(f"Error trying to upload IR attachment: {e}")
+            # Add comment about failed attachment upload
+            comment = f"[AWS Security IR] Failed to upload attachment '{ir_attachment_name}'. Please download from the Security IR case."
+            try:
+                self.service_now_service.add_incident_comment(service_now_incident_id, comment)
+            except Exception as comment_error:
+                logger.error(f"Failed to add attachment failure comment: {comment_error}")
+            
             # Clean up if file exists
             if os.path.exists(download_path):
                 os.remove(download_path)

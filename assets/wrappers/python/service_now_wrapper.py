@@ -7,16 +7,19 @@ import os
 import logging
 import boto3
 from typing import Dict, Optional, Any, List
-from pysnc import ServiceNowClient as SnowClient, GlideRecord, Attachment
+from pysnc import ServiceNowClient as SnowClient, GlideRecord, Attachment, AttachmentAPI
 
 # Import mappers with fallbacks for different environments
 try:
     # This import works for lambda function and imports the lambda layer at runtime
-    from service_now_sir_mapper import map_fields_to_service_now, map_case_status
+    from service_now_sir_mapper import (
+        map_sir_fields_to_service_now,
+        map_case_status,
+    )
 except ImportError:
     # This import works for local development and imports locally from the file system
     from mappers.python.service_now_sir_mapper import (
-        map_fields_to_service_now,
+        map_sir_fields_to_service_now,
         map_case_status,
     )
 
@@ -132,13 +135,16 @@ class ServiceNowClient:
 
         glide_record.short_description = fields.get("short_description", "")
         glide_record.description = fields.get("description", "")
-        glide_record.state = fields.get("state", "1")
+        if "state" in fields:
+            glide_record.state = fields["state"]
         glide_record.impact = fields.get("impact", "2")
         glide_record.priority = fields.get("priority", "3")
-        glide_record.incident_state = fields.get("incident_state", "1")
+        # if "incident_state" in fields:
+        #     glide_record.incident_state = fields["incident_state"]
         glide_record.urgency = fields.get("urgency", "2")
         glide_record.severity = fields.get("severity", "1")
         glide_record.comments_and_work_notes = fields.get("comments_and_work_notes", "")
+        glide_record.comments = fields.get("comments", "")
         glide_record.category = fields.get("category", "inquiry")
         glide_record.subcategory = fields.get("subcategory", "internal application")
 
@@ -248,26 +254,91 @@ class ServiceNowClient:
         except Exception as e:
             logger.error(f"Incident update failed with error: {e}")
             return None
+    
+    def add_incident_comment(self, incident_number, incident_comment) -> Optional[Any]:
+        """
+        Add a comment to an existing ServiceNow incident.
+
+        Args:
+            incident_number (str): Incident number in ServiceNow to be updated
+            incident_comment (str): Comment to add to the incident
+
+        Returns:
+            Optional[Any]: Updated ServiceNow incident record or None if update fails
+        """
+        try:
+            glide_record = self.__get_glide_record("incident")
+            glide_record.add_query("number", incident_number)
+            glide_record.query()
+            if glide_record.next():
+                glide_record.comments = incident_comment               
+                glide_record.update()
+                logger.info(f"Incident {incident_number} with comment {incident_comment} updated successfully")
+                return glide_record
+            else:
+                logger.error(f"Incident {incident_number} not found")
+                return None
+        except Exception as e:
+            logger.error(f"Incident comment update failed with error: {e}")
+            return None
 
     def upload_incident_attachment(
-        self, incident_number: str, attachment_path: str
+        self, incident_number: str, attachment_name: str, attachment_path: str
     ) -> Optional[Any]:
-        """Upload an attachment to a ServiceNow incident.
+        """Upload an attachment to a ServiceNow incident using REST API.
 
         Args:
             incident_number (str): The ServiceNow incident number
+            attachment_name (str): Name of the attachment
             attachment_path (str): Path to the attachment file
 
         Returns:
             Optional[Any]: Upload result or None if upload fails
         """
+        import mimetypes
+        import requests
+        from base64 import b64encode
+        
         try:
-            # Get a resource object for the incident table
-            incidents = self.client.resource(api_path="/table/incident")
-            # Fetch the incident record by number
-            incident = incidents.get(query={"number": incident_number})
-            incident.upload(file_path=attachment_path)
-            logger.info(f"Uploaded attachment to ServiceNow incident {incident_number}")
+            # Get the incident record first
+            glide_record = self.__get_glide_record("incident")
+            glide_record.add_query("number", incident_number)
+            glide_record.query()
+            if glide_record.next():
+                # Use REST API instead of AttachmentAPI to avoid 414 errors
+                password = self.__get_password()
+                auth = b64encode(f"{self.username}:{password}".encode()).decode()
+                
+                # Determine content type
+                content_type = mimetypes.guess_type(attachment_name)[0] or 'application/octet-stream'
+                
+                headers = {
+                    "Authorization": f"Basic {auth}",
+                    "Content-Type": content_type,
+                    # "Accept": "application/json"
+                }
+                
+                # Upload via REST API
+                url = f"https://{self.instance_id}.service-now.com/api/now/attachment/file"
+                params = {
+                    "table_name": "incident",
+                    "table_sys_id": glide_record.sys_id.get_display_value(),
+                    "file_name": attachment_name
+                }
+                
+                with open(attachment_path, 'rb') as f:
+                    file_content = f.read()
+                    response = requests.post(url, headers=headers, params=params, data=file_content, timeout=30)
+                
+                if response.status_code == 201:
+                    logger.info(f"Uploaded attachment {attachment_name} to ServiceNow incident {incident_number}")
+                    return True
+                else:
+                    logger.error(f"Upload failed with status {response.status_code}: {response.text}")
+                    return None
+            else:
+                logger.error(f"Incident {incident_number} not found")
+                return None
         except Exception as e:
             logger.error(f"Attachment upload failed with error: {e}")
             return None

@@ -40,8 +40,6 @@ MANDATORY_FIELDS = {
     "impact": "2",  # Default impact (1=High, 2=Medium, 3=Low)
     "urgency": "2",  # Default urgency (1=High, 2=Medium, 3=Low)
     "priority": "3",  # Default priority (calculated from impact/urgency)
-    "state": "1",  # Default state (1=New)
-    "incident_state": "1",  # Default incident state (1=New)
     "severity": "1",  # Default severity (1=High)
     "comments_and_work_notes": "",  # Empty comments field required by ServiceNow
 }
@@ -156,26 +154,30 @@ def map_sir_case_comments_to_service_now_incident(
     sir_case_comments_bodies = [comment["body"] for comment in sir_case_comments]
 
     if sir_case_comments_bodies:
+        # Extract ServiceNow comments once if they exist
+        service_now_incident_comments_list = []
+        if service_now_incident_comments:
+            service_now_incident_comments_list = convert_service_now_comments_to_list(service_now_incident_comments)
+        
         for sir_case_comment in sir_case_comments_bodies:
             logger.info(f"Security IR case comment: {sir_case_comment}")
-
-            # If comments exist for ServiceNow incident, extract them in a list for validation, comparison with SIR case comments, before adding them to the incident
-            if service_now_incident_comments:
-                service_now_incident_comments_list = (
-                    convert_service_now_comments_to_list(service_now_incident_comments)
-                )
-                for service_now_incident_comment in service_now_incident_comments_list:
-                    add_comment = validate_if_comment_needs_to_be_added(
-                        sir_case_comment,
-                        service_now_incident_comment,
-                        UPDATE_TAG_TO_SKIP,
-                    )
-                    if add_comment is True:
-                        logger.info(f"Adding {sir_case_comment} comment to the list")
-                        comments_list.add(sir_case_comment)
-            else:
+            
+            # Skip comments with update tag
+            if UPDATE_TAG_TO_SKIP in sir_case_comment:
+                continue
+                
+            # Check if comment already exists in ServiceNow
+            comment_exists = False
+            for service_now_comment in service_now_incident_comments_list:
+                if str(sir_case_comment).strip() == str(service_now_comment).strip():
+                    comment_exists = True
+                    break
+            
+            if not comment_exists:
                 logger.info(f"Adding {sir_case_comment} comment to the list")
-                comments_list.add(sir_case_comment)
+                comments_list.append(sir_case_comment)
+            else:
+                logger.info(f"Comment already exists in ServiceNow, skipping: {sir_case_comment}")
 
     logger.info(f"List of comments to be added in ServiceNow incident: {comments_list}")
     return comments_list
@@ -310,19 +312,24 @@ def map_service_now_incident_comments_to_sir_case(
         logger.info(
             f"Validating if ServiceNow incident comment: {service_now_incident_comment}, exists in Security IR or not"
         )
+        
+        # Skip comments with update tag
+        if UPDATE_TAG_TO_SKIP in service_now_incident_comment:
+            continue
+            
+        # Check if comment already exists in SIR case
+        comment_exists = False
         if sir_case_comments_bodies:
             for sir_case_comment in sir_case_comments_bodies:
-                add_comment = validate_if_comment_needs_to_be_added(
-                    service_now_incident_comment, sir_case_comment, UPDATE_TAG_TO_SKIP
-                )
-                if add_comment is True:
-                    logger.info(
-                        f"Adding {service_now_incident_comment} comment to the list"
-                    )
-                    comments_list.add(service_now_incident_comment)
-        else:
+                if str(service_now_incident_comment).strip() == str(sir_case_comment).strip():
+                    comment_exists = True
+                    break
+        
+        if not comment_exists:
             logger.info(f"Adding {service_now_incident_comment} comment to the list")
-            comments_list.add(service_now_incident_comment)
+            comments_list.append(service_now_incident_comment)
+        else:
+            logger.info(f"Comment already exists in SIR case, skipping: {service_now_incident_comment}")
 
     logger.info(f"List of comments to be added in Security IR case: {comments_list}")
     return comments_list
@@ -376,6 +383,8 @@ def validate_if_comment_needs_to_be_added(
     add_comment = True
     if UPDATE_TAG_TO_SKIP in source_comment:
         add_comment = False
+    logger.info(f"Source comment: {source_comment}")
+    logger.info(f"Destination comment: {dest_comment}")
     if str(source_comment).strip() == str(dest_comment).strip():
         add_comment = False
     return add_comment
