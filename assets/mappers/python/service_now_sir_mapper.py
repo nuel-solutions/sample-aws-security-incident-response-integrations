@@ -157,27 +157,31 @@ def map_sir_case_comments_to_service_now_incident(
         # Extract ServiceNow comments once if they exist
         service_now_incident_comments_list = []
         if service_now_incident_comments:
-            service_now_incident_comments_list = convert_service_now_comments_to_list(service_now_incident_comments)
-        
+            service_now_incident_comments_list = convert_service_now_comments_to_list(
+                service_now_incident_comments
+            )
+
         for sir_case_comment in sir_case_comments_bodies:
             logger.info(f"Security IR case comment: {sir_case_comment}")
-            
+
             # Skip comments with update tag
             if UPDATE_TAG_TO_SKIP in sir_case_comment:
                 continue
-                
+
             # Check if comment already exists in ServiceNow
             comment_exists = False
             for service_now_comment in service_now_incident_comments_list:
                 if str(sir_case_comment).strip() == str(service_now_comment).strip():
                     comment_exists = True
                     break
-            
+
             if not comment_exists:
                 logger.info(f"Adding {sir_case_comment} comment to the list")
                 comments_list.append(sir_case_comment)
             else:
-                logger.info(f"Comment already exists in ServiceNow, skipping: {sir_case_comment}")
+                logger.info(
+                    f"Comment already exists in ServiceNow, skipping: {sir_case_comment}"
+                )
 
     logger.info(f"List of comments to be added in ServiceNow incident: {comments_list}")
     return comments_list
@@ -312,24 +316,29 @@ def map_service_now_incident_comments_to_sir_case(
         logger.info(
             f"Validating if ServiceNow incident comment: {service_now_incident_comment}, exists in Security IR or not"
         )
-        
+
         # Skip comments with update tag
         if UPDATE_TAG_TO_SKIP in service_now_incident_comment:
             continue
-            
+
         # Check if comment already exists in SIR case
         comment_exists = False
         if sir_case_comments_bodies:
             for sir_case_comment in sir_case_comments_bodies:
-                if str(service_now_incident_comment).strip() == str(sir_case_comment).strip():
+                if (
+                    str(service_now_incident_comment).strip()
+                    == str(sir_case_comment).strip()
+                ):
                     comment_exists = True
                     break
-        
+
         if not comment_exists:
             logger.info(f"Adding {service_now_incident_comment} comment to the list")
             comments_list.append(service_now_incident_comment)
         else:
-            logger.info(f"Comment already exists in SIR case, skipping: {service_now_incident_comment}")
+            logger.info(
+                f"Comment already exists in SIR case, skipping: {service_now_incident_comment}"
+            )
 
     logger.info(f"List of comments to be added in Security IR case: {comments_list}")
     return comments_list

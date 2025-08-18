@@ -315,16 +315,16 @@ class DatabaseService:
     def __should_retry(self, attempt: int, max_retries: int, wait_time: int) -> bool:
         """
         Check if should retry and handle wait time
-        
+
         Args:
             attempt: Current attempt number
             max_retries: Maximum number of retries
             wait_time: Current wait time
-            
+
         Returns:
             True if should retry, False otherwise
         """
-        
+
         if attempt < max_retries - 1:
             logger.info(f"Retrying in {wait_time} seconds...")
             time.sleep(wait_time)
@@ -348,7 +348,7 @@ class DatabaseService:
         max_retries = 5
         wait_time = 10
         # time.sleep(wait_time)
-        
+
         for attempt in range(max_retries):
             try:
                 # TODO: Use GSIs and replace the following scan queries to use the service-now index instead (see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210189285892844?focus=true)
@@ -368,10 +368,14 @@ class DatabaseService:
                         ExclusiveStartKey=response["LastEvaluatedKey"],
                     )
                     items.extend(response["Items"])
-                
+
                 # Add retry logic when items is null/empty or missing required key
                 if not items or "serviceNowIncidentDetails" not in items[0]:
-                    reason = "not found" if not items else "missing serviceNowIncidentDetails key"
+                    reason = (
+                        "not found"
+                        if not items
+                        else "missing serviceNowIncidentDetails key"
+                    )
                     logger.info(
                         f"ServiceNow incident for {service_now_incident_id} {reason} in database on attempt {attempt + 1}"
                     )
@@ -379,11 +383,11 @@ class DatabaseService:
                         return None
                     wait_time = max(2, wait_time - 2)  # Decrease by 2s, minimum 2s
                     continue
-            
+
                 logger.info(
                     f"ServiceNow incident for {service_now_incident_id} found in database. Extracting incident details."
                 )
-                
+
                 return items[0]["serviceNowIncidentDetails"]
             except Exception as e:
                 logger.info(
@@ -406,7 +410,9 @@ class DatabaseService:
             ServiceNow incident details or None if not found
         """
         try:
-            service_now_incident_details = self.__get_incident_by_id(service_now_incident_id)
+            service_now_incident_details = self.__get_incident_by_id(
+                service_now_incident_id
+            )
             if not service_now_incident_details:
                 logger.info(
                     f"All retries completed. Incident details for {service_now_incident_id} not found in database."

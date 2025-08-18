@@ -277,7 +277,7 @@ class ServiceNowService:
         except Exception as e:
             logger.error(f"Error updating incident details from ServiceNow: {str(e)}")
             return None
-    
+
     def add_incident_comment(
         self, service_now_incident_number: str, service_now_incident_comment: str
     ) -> Optional[Any]:
@@ -295,14 +295,18 @@ class ServiceNowService:
                 service_now_incident_number, service_now_incident_comment
             )
             if not service_now_incident:
-                logger.error(f"Failed to add comment {service_now_incident_comment} to incident {service_now_incident_number} in ServiceNow")
+                logger.error(
+                    f"Failed to add comment {service_now_incident_comment} to incident {service_now_incident_number} in ServiceNow"
+                )
                 return None
             logger.info(
                 f"Added comment {service_now_incident_comment} to incident {service_now_incident_number}"
             )
             return service_now_incident
         except Exception as e:
-            logger.error(f"Error adding {service_now_incident_comment} comment to incident {service_now_incident_number} in ServiceNow: {str(e)}")
+            logger.error(
+                f"Error adding {service_now_incident_comment} comment to incident {service_now_incident_number} in ServiceNow: {str(e)}"
+            )
             return None
 
     def extract_incident_details(
@@ -443,7 +447,7 @@ class IncidentService:
         """
         # Map fields from SIR to ServiceNow
         service_now_fields = map_sir_fields_to_service_now(ir_case_detail)
-        
+
         # Map Security IR case status to ServiceNow incident state
         sir_case_status = ir_case_detail.get("caseStatus")
         if sir_case_status:
@@ -671,7 +675,9 @@ class IncidentService:
                 f"ServiceNow incident {service_now_incident_id} found for IR case {ir_case_id} in database, updating ServiceNow incident..."
             )
             logger.info(f"Updating with fields: {service_now_fields}")
-            logger.info(f"State field value: {service_now_fields.get('state', 'NOT SET')}")
+            logger.info(
+                f"State field value: {service_now_fields.get('state', 'NOT SET')}"
+            )
             self.service_now_service.update_incident(
                 service_now_incident_id, service_now_fields
             )
@@ -694,9 +700,13 @@ class IncidentService:
             # Compare with the filename property of the attachment
             attachment_filename = service_now_incident_attachment.get("filename", "")
             if str(sir_case_attachment_name) == str(attachment_filename):
-                logger.info(f"Attachment {sir_case_attachment_name} already exists in ServiceNow incident")
+                logger.info(
+                    f"Attachment {sir_case_attachment_name} already exists in ServiceNow incident"
+                )
                 return True
-        logger.info(f"Attachment {sir_case_attachment_name} does not exist in ServiceNow incident, will upload")
+        logger.info(
+            f"Attachment {sir_case_attachment_name} does not exist in ServiceNow incident, will upload"
+        )
         return False
 
     def upload_attachment_to_service_now_incident(
@@ -705,7 +715,7 @@ class IncidentService:
         # Check file size limit (5MB) to avoid 414 Request-URI Too Large error
         MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
         download_path = f"/tmp/{ir_attachment_name}"
-        
+
         try:
             # Get presigned URL
             ir_attachment_presigned_url = (
@@ -720,14 +730,18 @@ class IncidentService:
 
             # Download object to /tmp using the presigned URL
             response = requests.get(ir_attachment_presigned_url_str)
-            
+
             # Check file size before processing
             if len(response.content) > MAX_FILE_SIZE:
-                logger.warning(f"Attachment {ir_attachment_name} ({len(response.content)} bytes) exceeds size limit. Adding comment instead.")
+                logger.warning(
+                    f"Attachment {ir_attachment_name} ({len(response.content)} bytes) exceeds size limit. Adding comment instead."
+                )
                 comment = f"[AWS Security IR] Large attachment '{ir_attachment_name}' ({len(response.content)} bytes) could not be uploaded due to size limits. Please download from the Security IR case."
-                self.service_now_service.add_incident_comment(service_now_incident_id, comment)
+                self.service_now_service.add_incident_comment(
+                    service_now_incident_id, comment
+                )
                 return
-            
+
             with open(download_path, "wb") as f:
                 f.write(response.content)
 
@@ -748,10 +762,14 @@ class IncidentService:
             # Add comment about failed attachment upload
             comment = f"[AWS Security IR] Failed to upload attachment '{ir_attachment_name}'. Please download from the Security IR case."
             try:
-                self.service_now_service.add_incident_comment(service_now_incident_id, comment)
+                self.service_now_service.add_incident_comment(
+                    service_now_incident_id, comment
+                )
             except Exception as comment_error:
-                logger.error(f"Failed to add attachment failure comment: {comment_error}")
-            
+                logger.error(
+                    f"Failed to add attachment failure comment: {comment_error}"
+                )
+
             # Clean up if file exists
             if os.path.exists(download_path):
                 os.remove(download_path)

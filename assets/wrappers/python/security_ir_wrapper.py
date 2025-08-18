@@ -32,8 +32,7 @@ class SecurityIRClient:
         self.client = self._create_client()
 
     def _create_client(self) -> client:
-        """
-        Create a Security IR client instance.
+        """Create a Security IR client instance.
 
         Returns:
             boto3.client: Security IR client or None if creation fails
@@ -46,8 +45,7 @@ class SecurityIRClient:
             return None
 
     def get_case(self, case_id: str) -> dict:
-        """
-        Get a Security IR case by ID.
+        """Get a Security IR case by ID.
 
         Args:
             case_id (str): The Security IR case ID
@@ -64,8 +62,7 @@ class SecurityIRClient:
             return None
 
     def create_case(self, fields: Dict[str, Any]) -> Optional[Any]:
-        """
-        Create a new Security IR case.
+        """Create a new Security IR case.
 
         Args:
             fields (Dict[str, Any]): Dictionary of case fields
@@ -81,8 +78,7 @@ class SecurityIRClient:
             return None
 
     def update_case(self, case_id: str, fields: Dict[str, Any]) -> bool:
-        """
-        Update a Security IR case.
+        """Update a Security IR case.
 
         Args:
             case_id (str): The Security IR case ID
@@ -102,8 +98,7 @@ class SecurityIRClient:
     def update_status(
         self, case_id: str, status: str, comment: Optional[str] = None
     ) -> bool:
-        """
-        Update the status of a Security IR case.
+        """Update the status of a Security IR case.
 
         Args:
             case_id (str): The Security IR case ID

@@ -254,7 +254,7 @@ class ServiceNowClient:
         except Exception as e:
             logger.error(f"Incident update failed with error: {e}")
             return None
-    
+
     def add_incident_comment(self, incident_number, incident_comment) -> Optional[Any]:
         """
         Add a comment to an existing ServiceNow incident.
@@ -271,9 +271,11 @@ class ServiceNowClient:
             glide_record.add_query("number", incident_number)
             glide_record.query()
             if glide_record.next():
-                glide_record.comments = incident_comment               
+                glide_record.comments = incident_comment
                 glide_record.update()
-                logger.info(f"Incident {incident_number} with comment {incident_comment} updated successfully")
+                logger.info(
+                    f"Incident {incident_number} with comment {incident_comment} updated successfully"
+                )
                 return glide_record
             else:
                 logger.error(f"Incident {incident_number} not found")
@@ -298,7 +300,7 @@ class ServiceNowClient:
         import mimetypes
         import requests
         from base64 import b64encode
-        
+
         try:
             # Get the incident record first
             glide_record = self.__get_glide_record("incident")
@@ -308,33 +310,46 @@ class ServiceNowClient:
                 # Use REST API instead of AttachmentAPI to avoid 414 errors
                 password = self.__get_password()
                 auth = b64encode(f"{self.username}:{password}".encode()).decode()
-                
+
                 # Determine content type
-                content_type = mimetypes.guess_type(attachment_name)[0] or 'application/octet-stream'
-                
+                content_type = (
+                    mimetypes.guess_type(attachment_name)[0]
+                    or "application/octet-stream"
+                )
+
                 headers = {
                     "Authorization": f"Basic {auth}",
                     "Content-Type": content_type,
                     # "Accept": "application/json"
                 }
-                
+
                 # Upload via REST API
                 url = f"https://{self.instance_id}.service-now.com/api/now/attachment/file"
                 params = {
                     "table_name": "incident",
                     "table_sys_id": glide_record.sys_id.get_display_value(),
-                    "file_name": attachment_name
+                    "file_name": attachment_name,
                 }
-                
-                with open(attachment_path, 'rb') as f:
+
+                with open(attachment_path, "rb") as f:
                     file_content = f.read()
-                    response = requests.post(url, headers=headers, params=params, data=file_content, timeout=30)
-                
+                    response = requests.post(
+                        url,
+                        headers=headers,
+                        params=params,
+                        data=file_content,
+                        timeout=30,
+                    )
+
                 if response.status_code == 201:
-                    logger.info(f"Uploaded attachment {attachment_name} to ServiceNow incident {incident_number}")
+                    logger.info(
+                        f"Uploaded attachment {attachment_name} to ServiceNow incident {incident_number}"
+                    )
                     return True
                 else:
-                    logger.error(f"Upload failed with status {response.status_code}: {response.text}")
+                    logger.error(
+                        f"Upload failed with status {response.status_code}: {response.text}"
+                    )
                     return None
             else:
                 logger.error(f"Incident {incident_number} not found")

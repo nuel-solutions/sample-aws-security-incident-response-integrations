@@ -130,35 +130,51 @@ def process_service_now_event(service_now_incident: dict, event_source: str) -> 
 
         if security_ir_case_id:
             # Get current Security IR case details to compare for changes
-            current_sir_case = incident_service.get_incident_from_sir(security_ir_case_id)
-            
+            current_sir_case = incident_service.get_incident_from_sir(
+                security_ir_case_id
+            )
+
             if current_sir_case:
                 # Check if there are actual changes before updating
                 needs_update = False
-                
+
                 # Compare title
                 if current_sir_case.get("title") != security_ir_fields.get("title"):
                     needs_update = True
-                    logger.info(f"Title changed: {current_sir_case.get('title')} -> {security_ir_fields.get('title')}")
-                
+                    logger.info(
+                        f"Title changed: {current_sir_case.get('title')} -> {security_ir_fields.get('title')}"
+                    )
+
                 # Compare description
-                if current_sir_case.get("description") != security_ir_fields.get("description"):
+                if current_sir_case.get("description") != security_ir_fields.get(
+                    "description"
+                ):
                     needs_update = True
-                    logger.info(f"Description changed: {current_sir_case.get("description")}")
-                
+                    logger.info(
+                        f"Description changed: {current_sir_case.get('description')}"
+                    )
+
                 # Compare status
-                if current_sir_case.get("caseStatus") != security_ir_fields.get("caseStatus"):
+                if current_sir_case.get("caseStatus") != security_ir_fields.get(
+                    "caseStatus"
+                ):
                     needs_update = True
-                    logger.info(f"Status changed: {current_sir_case.get('caseStatus')} -> {security_ir_fields.get('caseStatus')}")
-                
+                    logger.info(
+                        f"Status changed: {current_sir_case.get('caseStatus')} -> {security_ir_fields.get('caseStatus')}"
+                    )
+
                 if needs_update:
                     security_ir_fields["caseId"] = security_ir_case_id
                     _ = incident_service.update_incident_details_in_sir(
                         security_ir_case=security_ir_fields
                     )
-                    logger.info(f"Updated Security IR case {security_ir_case_id} due to changes")
+                    logger.info(
+                        f"Updated Security IR case {security_ir_case_id} due to changes"
+                    )
                 else:
-                    logger.info(f"No changes detected for Security IR case {security_ir_case_id}, skipping update")
+                    logger.info(
+                        f"No changes detected for Security IR case {security_ir_case_id}, skipping update"
+                    )
             else:
                 # If we can't get current case details, proceed with update
                 security_ir_fields["caseId"] = security_ir_case_id
