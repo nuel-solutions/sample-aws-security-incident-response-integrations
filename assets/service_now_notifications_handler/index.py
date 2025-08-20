@@ -8,6 +8,7 @@ import html
 import os
 import sys
 import datetime
+import time
 import re
 import traceback
 import logging
@@ -27,6 +28,10 @@ except ImportError:
 
 # Constants
 EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "service-now")
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # Configure logging with AWS Lambda Powertools
 log_level = os.environ.get("LOG_LEVEL", "error").lower()
@@ -86,7 +91,6 @@ class IncidentCreatedEvent(BaseEvent):
             "number": self.incident.get("number", ""),
             "short_description": self.incident.get("short_description", ""),
             "description": self.incident.get("description", ""),
-            "sys_updated_on": self.incident.get("sys_updated_on", ""),
             "sys_created_on": self.incident.get("sys_created_on", ""),
             "sys_created_by": self.incident.get("sys_created_by", ""),
             "resolved_by": self.incident.get("resolved_by", ""),
@@ -98,9 +102,10 @@ class IncidentCreatedEvent(BaseEvent):
             "active": self.incident.get("active", ""),
             "priority": self.incident.get("priority", ""),
             "caller_id": self.incident.get("caller_id", ""),
-            "incident_state": self.incident.get("incident_state", ""),
             "urgency": self.incident.get("urgency", ""),
             "severity": self.incident.get("severity", ""),
+            "comments": self.incident.get("comments", ""),
+            "work_notes": self.incident.get("work_notes", ""),
             "comments_and_work_notes": self.incident.get("comments_and_work_notes", ""),
             "close_code": self.incident.get("close_code", ""),
             "close_notes": self.incident.get("close_notes", ""),
@@ -143,7 +148,6 @@ class IncidentUpdatedEvent(BaseEvent):
             "number": self.incident.get("number", ""),
             "short_description": self.incident.get("short_description", ""),
             "description": self.incident.get("description", ""),
-            "sys_updated_on": self.incident.get("sys_updated_on", ""),
             "sys_created_on": self.incident.get("sys_created_on", ""),
             "sys_created_by": self.incident.get("sys_created_by", ""),
             "resolved_by": self.incident.get("resolved_by", ""),
@@ -155,7 +159,6 @@ class IncidentUpdatedEvent(BaseEvent):
             "active": self.incident.get("active", ""),
             "priority": self.incident.get("priority", ""),
             "caller_id": self.incident.get("caller_id", ""),
-            "incident_state": self.incident.get("incident_state", ""),
             "urgency": self.incident.get("urgency", ""),
             "severity": self.incident.get("severity", ""),
             "comments_and_work_notes": self.incident.get("comments_and_work_notes", ""),
@@ -249,6 +252,7 @@ class ParameterService:
             )
             return None
 
+
 class EventPublisherService:
     """Service for publishing events to EventBridge"""
 
@@ -308,11 +312,32 @@ class DatabaseService:
         """Initialize the database service"""
         self.table = dynamodb.Table(table_name)
 
-    def __scan_for_incident_id(
+    def __should_retry(self, attempt: int, max_retries: int, wait_time: int) -> bool:
+        """
+        Check if should retry and handle wait time
+
+        Args:
+            attempt: Current attempt number
+            max_retries: Maximum number of retries
+            wait_time: Current wait time
+
+        Returns:
+            True if should retry, False otherwise
+        """
+
+        if attempt < max_retries - 1:
+            logger.info(f"Retrying in {wait_time} seconds...")
+            time.sleep(wait_time)
+            return True
+        else:
+            logger.error(f"All {max_retries} attempts failed")
+            return False
+
+    def __get_incident_by_id(
         self, service_now_incident_id: str
     ) -> List[Dict[str, Any]]:
         """
-        Scan DynamoDB table for ServiceNow incident ID
+        Scan DynamoDB table for ServiceNow incident ID with retry logic
 
         Args:
             service_now_incident_id: The ServiceNow incident ID
@@ -320,36 +345,59 @@ class DatabaseService:
         Returns:
             List of matching items
         """
-        try:
-            # TODO: Use GSIs and replace the following scan queries to use the service-now index instead (see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210189285892844?focus=true)
-            response = self.table.scan(
-                FilterExpression=Attr("serviceNowIncidentId").eq(
-                    service_now_incident_id
-                )
-            )
-            items = response["Items"]
+        max_retries = 5
+        wait_time = 10
+        # time.sleep(wait_time)
 
-            # Handle pagination if there are more items
-            while "LastEvaluatedKey" in response:
+        for attempt in range(max_retries):
+            try:
+                # TODO: Use GSIs and replace the following scan queries to use the service-now index instead (see https://app.asana.com/1/8442528107068/project/1209571477232011/task/1210189285892844?focus=true)
                 response = self.table.scan(
                     FilterExpression=Attr("serviceNowIncidentId").eq(
                         service_now_incident_id
-                    ),
-                    ExclusiveStartKey=response["LastEvaluatedKey"],
+                    )
                 )
-                items.extend(response["Items"])
-            return items
-        except ClientError as e:
-            error_code = e.response["Error"]["Code"]
-            logger.error(
-                f"Error retrieving details from the DynamoDB table: {error_code}"
-            )
-            return []
-        except KeyError:
-            logger.error(
-                f"ServiceNow incident for {service_now_incident_id} not found in database"
-            )
-            return []
+                items = response["Items"]
+
+                # Handle pagination if there are more items
+                while "LastEvaluatedKey" in response:
+                    response = self.table.scan(
+                        FilterExpression=Attr("serviceNowIncidentId").eq(
+                            service_now_incident_id
+                        ),
+                        ExclusiveStartKey=response["LastEvaluatedKey"],
+                    )
+                    items.extend(response["Items"])
+
+                # Add retry logic when items is null/empty or missing required key
+                if not items or "serviceNowIncidentDetails" not in items[0]:
+                    reason = (
+                        "not found"
+                        if not items
+                        else "missing serviceNowIncidentDetails key"
+                    )
+                    logger.info(
+                        f"ServiceNow incident for {service_now_incident_id} {reason} in database on attempt {attempt + 1}"
+                    )
+                    if not self.__should_retry(attempt, max_retries, wait_time):
+                        return None
+                    wait_time = max(2, wait_time - 2)  # Decrease by 2s, minimum 2s
+                    continue
+
+                logger.info(
+                    f"ServiceNow incident for {service_now_incident_id} found in database. Extracting incident details."
+                )
+
+                return items[0]["serviceNowIncidentDetails"]
+            except Exception as e:
+                logger.info(
+                    f"ServiceNow incident for {service_now_incident_id} not found in database on attempt {attempt + 1}. Error encountered: str{e}"
+                )
+                if not self.__should_retry(attempt, max_retries, wait_time):
+                    return []
+                wait_time = max(2, wait_time - 2)  # Decrease by 2s, minimum 2s
+                continue
+        return None
 
     def _get_incident_details(self, service_now_incident_id: str) -> Optional[str]:
         """
@@ -362,14 +410,15 @@ class DatabaseService:
             ServiceNow incident details or None if not found
         """
         try:
-            items = self.__scan_for_incident_id(service_now_incident_id)
-            if not items:
+            service_now_incident_details = self.__get_incident_by_id(
+                service_now_incident_id
+            )
+            if not service_now_incident_details:
                 logger.info(
-                    f"Incident details for {service_now_incident_id} not found in database."
+                    f"All retries completed. Incident details for {service_now_incident_id} not found in database."
                 )
                 return None
 
-            service_now_incident_details = items[0]["serviceNowIncidentDetails"]
             logger.info(
                 f"Incident details for {service_now_incident_id} found in database."
             )
@@ -492,13 +541,12 @@ class ServiceNowService:
                 }
                 for attachment in service_now_incident_attachments
             ]
-            
+
             incident_dict = {
-                "sys_id": service_now_incident.sys_id,
-                "number": service_now_incident.number,
-                "short_description": service_now_incident.short_description,
-                "description": service_now_incident.description,
-                "sys_updated_on": service_now_incident.sys_updated_on.get_display_value(),
+                "sys_id": service_now_incident.sys_id.get_display_value(),
+                "number": service_now_incident.number.get_display_value(),
+                "short_description": service_now_incident.short_description.get_display_value(),
+                "description": service_now_incident.description.get_display_value(),
                 "sys_created_on": service_now_incident.sys_created_on.get_display_value(),
                 "sys_created_by": service_now_incident.sys_created_by.get_display_value(),
                 "resolved_by": service_now_incident.resolved_by.get_display_value(),
@@ -510,9 +558,10 @@ class ServiceNowService:
                 "active": service_now_incident.active.get_display_value(),
                 "priority": service_now_incident.priority.get_display_value(),
                 "caller_id": service_now_incident.caller_id.get_display_value(),
-                "incident_state": service_now_incident.incident_state.get_display_value(),
                 "urgency": service_now_incident.urgency.get_display_value(),
                 "severity": service_now_incident.severity.get_display_value(),
+                "comments": service_now_incident.comments.get_display_value(),
+                "work_notes": service_now_incident.work_notes.get_display_value(),
                 "comments_and_work_notes": service_now_incident.comments_and_work_notes.get_display_value(),
                 "close_code": service_now_incident.close_code.get_display_value(),
                 "close_notes": service_now_incident.close_notes.get_display_value(),
@@ -810,10 +859,10 @@ class ServiceNowMessageProcessorService:
             logger.info(
                 f"Publishing IncidentCreatedEvent for ServiceNow incident {incident_number}"
             )
+            self.db_service._add_incident_details(incident_number, incident_details)
             self.event_publisher_service._publish_event(
                 IncidentCreatedEvent(incident_details)
             )
-            self.db_service._add_incident_details(incident_number, incident_details)
             return True
         except Exception as e:
             logger.error(f"Error handling new incident {incident_number}: {str(e)}")
@@ -838,16 +887,19 @@ class ServiceNowMessageProcessorService:
         """
         try:
             # Compare incident details to detect changes
-            incident_details_json = json.dumps(incident_details)
-            if json.loads(incident_details_json) != json.loads(existing_details):
+            logger.info(f"Latest Incident details from ServiceNow {incident_details}")
+            logger.info(
+                f"Existing Incident details from DDB {json.loads(existing_details)}"
+            )
+            if incident_details != json.loads(existing_details):
                 logger.info(
                     f"Publishing IncidentUpdatedEvent for ServiceNow incident {incident_number}"
                 )
-                self.event_publisher_service._publish_event(
-                    IncidentUpdatedEvent(incident_details)
-                )
                 self.db_service._update_incident_details(
                     incident_number, incident_details
+                )
+                self.event_publisher_service._publish_event(
+                    IncidentUpdatedEvent(incident_details)
                 )
             else:
                 logger.info(f"No changes detected for incident {incident_number}")
@@ -907,7 +959,7 @@ class ResponseBuilderService:
         }
 
 
-@logger.inject_lambda_context
+# @logger.inject_lambda_context
 def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     """
     Lambda handler for processing API Gateway webhook events from ServiceNow
