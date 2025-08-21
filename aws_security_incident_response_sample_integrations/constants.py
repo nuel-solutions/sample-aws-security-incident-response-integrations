@@ -9,9 +9,17 @@ SERVICE_NOW_AWS_ACCOUNT_ID = "XXXXXXXXXXXX"
 # Event sources
 JIRA_EVENT_SOURCE = "jira"
 SERVICE_NOW_EVENT_SOURCE = "service-now"
+SLACK_EVENT_SOURCE = "slack"
 SECURITY_IR_EVENT_SOURCE = "security-ir"
 
 # Integration target constants
 JIRA_ISSUE_TYPE = "Task"
+
+# Slack integration constants
+SLACK_CHANNEL_PREFIX = "aws-security-incident-response-case-"
+SLACK_SYSTEM_COMMENT_TAG = "[Slack Update]"
+SLACK_MAX_RETRIES = 5
+SLACK_INITIAL_RETRY_DELAY = 1  # seconds
+SLACK_MAX_RETRY_DELAY = 60  # seconds
 
 # ServiceNow automation constants
