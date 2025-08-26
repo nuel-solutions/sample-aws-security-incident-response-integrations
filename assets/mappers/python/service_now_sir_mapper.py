@@ -135,18 +135,18 @@ def map_sir_fields_to_service_now(sir_case: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def map_sir_case_comments_to_service_now_incident(
-    sir_case_comments, service_now_incident_comments
-):
+    sir_case_comments: List[Dict[str, Any]], service_now_incident_comments: str
+) -> List[str]:
     """Maps AWS Security Incident Response case comments to Service Now incident comments.
 
     Args:
         sir_case_comments (List[Dict[str, Any]]): List of comments from AWS Security Incident Response case
-        service_now_incident_comments (List[Dict[str, Any]]): List of comments from Service Now incident
+        service_now_incident_comments (str): Comments string from Service Now incident
 
     Returns:
         List[str]: List of comments to be added to Service Now incident
     """
-    UPDATE_TAG_TO_SKIP = "[Service Now Update]"
+    UPDATE_TAG_TO_SKIP = "[service-now Update]"
     comments_list = []
 
     logger.info("Preparing list of comments to be added in ServiceNow incident")
@@ -289,16 +289,16 @@ def map_service_now_fields_to_sir(
 
 
 def map_service_now_incident_comments_to_sir_case(
-    service_now_incident_comments, sir_case_comments
-):
+    service_now_incident_comments: str, sir_case_comments: List[Dict[str, Any]]
+) -> List[str]:
     """Maps ServiceNow incident comments to Security IR case comments.
 
     Args:
         service_now_incident_comments (str): ServiceNow incident comments
-        sir_case_comments (dict): Security IR case comments
+        sir_case_comments (List[Dict[str, Any]]): Security IR case comments
 
     Returns:
-        List of comments
+        List[str]: List of comments to be added to Security IR case
     """
     UPDATE_TAG_TO_SKIP = "[AWS Security Incident Response Update]"
     comments_list = []
