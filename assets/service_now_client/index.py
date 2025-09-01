@@ -324,16 +324,6 @@ class ServiceNowService:
             Dict[str, Any]: Dictionary with serializable ServiceNow incident details
         """
         try:
-            # attachments_list = []
-            # for attachment in service_now_incident_attachments:
-            #     attachment_details = {
-            #         "filename": attachment.file_name,
-            #         "content_type": attachment.content_type,
-            #     }
-            #     attachments_list.append(attachment_details)
-
-            # logger.info(f"List of attachments: {attachments_list}")
-
             incident_dict = {
                 "sys_id": service_now_incident.sys_id.get_display_value(),
                 "number": service_now_incident.number.get_display_value(),

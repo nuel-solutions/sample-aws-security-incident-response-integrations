@@ -18,14 +18,7 @@ else:
     # Default to ERROR level
     logger.setLevel(logging.ERROR)
 
-# Add a stream handler if not already added
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+
 
 # Import types
 from typing import List, Dict, Optional, Any

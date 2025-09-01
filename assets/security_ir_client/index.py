@@ -302,28 +302,6 @@ def process_service_now_event(service_now_incident: dict, event_source: str) -> 
                     f"Uploaded attachment {service_now_incident_attachment_name} to Security IR case {security_ir_case_id}"
                 )
 
-    # Extract comment bodies from sir_case_comments for attachment checking
-    # sir_comment_bodies = [comment["body"] for comment in sir_case_comments["items"]]
-
-    # determine whether this is a new attachment before adding
-
-    # for service_now_incident_attachment_name in service_now_incident_filenames:
-    #     add_attachment_comment = True
-    #     for sir_comment in sir_comment_bodies:
-    #         if service_now_incident_attachment_name in sir_comment:
-    #             add_attachment_comment = False
-
-    #     # only add a comment for new attachments
-    #     if add_attachment_comment is True:
-    #         # add attachment to Security IR case
-    #         _ = incident_service.add_incident_attachment_in_sir(
-    #             security_ir_case_id=security_ir_case_id,
-    #             attachment_filename=service_now_incident_attachment_name,
-    #             event_source=event_source,
-    #             incident_number=service_now_incident_id,
-    #         )
-    #         logger.info(f"Added attachment to Security IR case {security_ir_case_id}")
-
     # get latest security_ir now that all fields have been updated
     # and store it in the database
     security_ir_incident = incident_service.get_incident_from_sir(security_ir_case_id)
@@ -999,35 +977,39 @@ class IncidentService:
                 if attachment_data:
                     # get the content length of the attachment for uploading to AWS Security Incident Response case
                     attachment_content = attachment_data.get("attachment_content")
-                    content_length = len(attachment_content)
+                    content_length = attachment_data.get("attachment_content_length")
 
                     # Get upload URL from Security IR
                     upload_response = (
                         self.__security_ir_client.get_case_attachment_upload_url(
                             caseId=security_ir_case_id,
                             fileName=attachment_filename,
-                            contentLength=content_length,
+                            contentLength=int(content_length),
                         )
                     )
 
                     if upload_response:
-                        attachment_upload_presigned_url = upload_response.get(
+                        attachment_upload_presigned_url = upload_response[
                             "attachmentPresignedUrl"
+                        ]
+                        logger.info(
+                            f"Successfully retrieved upload URL for attachment {attachment_filename} to Security IR case {security_ir_case_id}: {attachment_upload_presigned_url}"
                         )
+                        logger.info(
+                            f"Successfully retrieved the attachment content: {attachment_content}"
+                        )
+                        
                         # Upload attachment data to Security IR
-                        # Determine proper Content-Type based on file extension
-                        # content_type, _ = mimetypes.guess_type(attachment_filename)
-                        # if not content_type:
-                        #     content_type = 'application/octet-stream'
-
-                        content_type = attachment_data.get("attachment_content_type")
-
                         response = requests.put(
                             attachment_upload_presigned_url,
                             data=attachment_content,
-                            headers={"Content-Type": content_type},
+                            headers={
+                                "If-None-Match": "*",
+                                "Content-Length": content_length,
+                                "Content-Type": "application/octet-stream"
+                                },
                         )
-
+                        
                         if response.status_code == 200:
                             logger.info(
                                 f"Successfully uploaded attachment {attachment_filename} to Security IR case {security_ir_case_id}"

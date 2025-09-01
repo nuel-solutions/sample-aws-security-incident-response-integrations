@@ -3,26 +3,13 @@ ServiceNow API wrapper for AWS Security Incident Response integration.
 This module provides a wrapper around the ServiceNow API for use in the Security Incident Response integration.
 """
 
-import os
 import logging
 import boto3
 from typing import Dict, Optional, Any, List
-from pysnc import ServiceNowClient as SnowClient, GlideRecord, Attachment, AttachmentAPI
+from pysnc import ServiceNowClient as SnowClient, GlideRecord
+import mimetypes
 import requests
-
-# # Import mappers with fallbacks for different environments
-# try:
-#     # This import works for lambda function and imports the lambda layer at runtime
-#     from service_now_sir_mapper import (
-#         map_sir_fields_to_service_now,
-#         map_case_status,
-#     )
-# except ImportError:
-#     # This import works for local development and imports locally from the file system
-#     from mappers.python.service_now_sir_mapper import (
-#         map_sir_fields_to_service_now,
-#         map_case_status,
-#     )
+from base64 import b64encode
 
 # Configure logging
 logger = logging.getLogger()
@@ -211,22 +198,29 @@ class ServiceNowClient:
             attachment_name (str): Name of the attachment to retrieve
 
         Returns:
-            Optional[Dict[str, Any]]: Dictionary containing attachment content and content type, or None if retrieval fails
+            Optional[Dict[str, Any]]: Dictionary containing attachment content, content type, and content size, or None if retrieval fails
         """
         try:
             attachments = glide_record.get_attachments()
             for attachment in attachments:
                 if attachment.file_name == attachment_name:
-                    attachment_content = attachment.read()
-                    logger.info(
-                        f"Attachment content for {attachment_name} from ServiceNow: {attachment_content}"
-                    )
-                    attachment_content_type = attachment.content_type
-                    attachment_data = {
-                        "attachment_content": attachment_content,
-                        "attachment_content_type": attachment_content_type,
-                    }
-                    return attachment_data
+                    # Temporary path to download the attachment
+                    temp_path = f"/tmp/{attachment_name}"
+                    attachment.write_to(temp_path)
+                        
+                    # Read attachment content in binary mode
+                    with open(temp_path, "rb") as f:
+                        attachment_content = f.read()
+                    
+                        # Return the complete temp path as attachment_url                    
+                        attachment_content_type = attachment.content_type
+                        attachment_content_length = attachment.size_bytes
+                        attachment_data = {
+                            "attachment_content": attachment_content,
+                            "attachment_content_type": attachment_content_type,
+                            "attachment_content_length": attachment_content_length
+                        }
+                        return attachment_data
         except Exception as e:
             logger.error(
                 f"Error getting attachment data for incident {glide_record.number} from ServiceNow: {str(e)}"
@@ -335,9 +329,6 @@ class ServiceNowClient:
         Returns:
             Optional[bool]: True if upload successful, None if upload fails
         """
-        import mimetypes
-        import requests
-        from base64 import b64encode
 
         try:
             # Get the incident record first
@@ -358,7 +349,6 @@ class ServiceNowClient:
                 headers = {
                     "Authorization": f"Basic {auth}",
                     "Content-Type": content_type,
-                    # "Accept": "application/json"
                 }
 
                 # Upload via REST API
