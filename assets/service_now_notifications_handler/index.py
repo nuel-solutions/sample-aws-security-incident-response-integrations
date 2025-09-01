@@ -31,11 +31,16 @@ EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "service-now")
 
 # Configure logging
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
-# Configure logging with AWS Lambda Powertools
+# Get log level from environment variable
 log_level = os.environ.get("LOG_LEVEL", "error").lower()
-logger = Logger(service="service-now-notifications-handler", level=log_level)
+if log_level == "debug":
+    logger.setLevel(logging.DEBUG)
+elif log_level == "info":
+    logger.setLevel(logging.INFO)
+else:
+    # Default to ERROR level
+    logger.setLevel(logging.ERROR)
 
 # Initialize AWS clients
 events_client = boto3.client("events")
@@ -46,7 +51,14 @@ class DateTimeEncoder(json.JSONEncoder):
     """Custom JSON encoder for datetime objects"""
 
     def default(self, obj):
-        """Convert datetime objects to ISO format strings"""
+        """Convert datetime objects to ISO format strings.
+
+        Args:
+            obj: Object to encode
+
+        Returns:
+            str: ISO formatted datetime string or default encoding
+        """
         if isinstance(obj, (datetime.date, datetime.datetime)):
             return obj.isoformat()
         return super().default(obj)
@@ -59,7 +71,11 @@ class BaseEvent:
     event_source = EVENT_SOURCE
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the event to a dictionary"""
+        """Convert the event to a dictionary.
+
+        Returns:
+            Dict[str, Any]: Dictionary representation of the event
+        """
         raise NotImplementedError("Subclasses must implement to_dict()")
 
 
@@ -69,11 +85,10 @@ class IncidentCreatedEvent(BaseEvent):
     event_type = "IncidentCreated"
 
     def __init__(self, incident: Dict[str, Any]):
-        """
-        Initialize an IncidentCreatedEvent
+        """Initialize an IncidentCreatedEvent.
 
         Args:
-            incident: The incident details dictionary
+            incident (Dict[str, Any]): The incident details dictionary
         """
         self.incident = incident
 
@@ -126,11 +141,10 @@ class IncidentUpdatedEvent(BaseEvent):
     event_type = "IncidentUpdated"
 
     def __init__(self, incident: Dict[str, Any]):
-        """
-        Initialize an IncidentUpdatedEvent
+        """Initialize an IncidentUpdatedEvent.
 
         Args:
-            incident: The incident details dictionary
+            incident (Dict[str, Any]): The incident details dictionary
         """
         self.incident = incident
 
@@ -181,11 +195,10 @@ class IncidentDeletedEvent(BaseEvent):
     event_type = "IncidentDeleted"
 
     def __init__(self, incident_id: str):
-        """
-        Initialize an IncidentDeletedEvent
+        """Initialize an IncidentDeletedEvent.
 
         Args:
-            incident_id: The ID of the incident that was deleted
+            incident_id (str): The ID of the incident that was deleted
         """
         self.incident_id = incident_id
 
@@ -207,18 +220,17 @@ class ParameterService:
     """Class to handle parameter operations"""
 
     def __init__(self):
-        """Initialize the parameter service"""
+        """Initialize the parameter service."""
         self.ssm_client = boto3.client("ssm")
 
     def _get_parameter(self, parameter_name: str) -> Optional[str]:
-        """
-        Get a parameter from SSM Parameter Store
+        """Get a parameter from SSM Parameter Store.
 
         Args:
-            parameter_name: The name of the parameter to retrieve
+            parameter_name (str): The name of the parameter to retrieve
 
         Returns:
-            Parameter value or None if retrieval fails
+            Optional[str]: Parameter value or None if retrieval fails
         """
         if not parameter_name:
             logger.error("Parameter name is empty or None")
@@ -534,14 +546,6 @@ class ServiceNowService:
             Dictionary with serializable ServiceNow incident details
         """
         try:
-            attachments_list = [
-                {
-                    "filename": attachment.file_name,
-                    "content_type": attachment.content_type,
-                }
-                for attachment in service_now_incident_attachments
-            ]
-
             incident_dict = {
                 "sys_id": service_now_incident.sys_id.get_display_value(),
                 "number": service_now_incident.number.get_display_value(),
@@ -572,7 +576,7 @@ class ServiceNowService:
                 "sys_tags": service_now_incident.sys_tags.get_display_value(),
                 "category": service_now_incident.subcategory.get_display_value(),
                 "subcategory": service_now_incident.subcategory.get_display_value(),
-                "attachments": attachments_list,
+                "attachments": service_now_incident_attachments,
             }
             return incident_dict
         except Exception as e:
@@ -609,7 +613,9 @@ class ServiceNowService:
                 service_now_incident_id
             )
             service_now_incident_attachments = (
-                self.service_now_client.get_incident_attachments(service_now_incident)
+                self.service_now_client.get_incident_attachments_details(
+                    service_now_incident
+                )
             )
             if not service_now_incident:
                 logger.error(

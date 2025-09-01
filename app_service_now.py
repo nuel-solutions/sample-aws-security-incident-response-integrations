@@ -10,9 +10,18 @@ from aws_security_incident_response_sample_integrations.aws_security_incident_re
 
 app = cdk.App()
 
-# Create common stack
+# ServiceNow parameters for common stack
+service_now_params = {
+    "instance_id_param_name": "/SecurityIncidentResponse/serviceNowInstanceId",
+    "username_param_name": "/SecurityIncidentResponse/serviceNowUser",
+    "password_param_name": "/SecurityIncidentResponse/serviceNowPassword",
+}
+
+# Create common stack with ServiceNow parameters
 common_stack = AwsSecurityIncidentResponseSampleIntegrationsCommonStack(
-    app, "AwsSecurityIncidentResponseSampleIntegrationsCommonStack"
+    app,
+    "AwsSecurityIncidentResponseSampleIntegrationsCommonStack",
+    service_now_params=service_now_params,
 )
 
 # Create ServiceNow integration stack

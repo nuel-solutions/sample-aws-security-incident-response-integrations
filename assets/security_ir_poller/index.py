@@ -7,29 +7,18 @@ import traceback
 
 # Configure logging
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
 
-# # Configure logging
-# logger = logging.getLogger()
+# Get log level from environment variable
+log_level = os.environ.get("LOG_LEVEL", "error").lower()
+if log_level == "debug":
+    logger.setLevel(logging.DEBUG)
+elif log_level == "info":
+    logger.setLevel(logging.INFO)
+else:
+    # Default to ERROR level
+    logger.setLevel(logging.ERROR)
 
-# # Get log level from environment variable
-# log_level = os.environ.get("LOG_LEVEL", "error").lower()
-# if log_level == "debug":
-#     logger.setLevel(logging.DEBUG)
-# elif log_level == "info":
-#     logger.setLevel(logging.INFO)
-# else:
-#     # Default to ERROR level
-#     logger.setLevel(logging.ERROR)
 
-# Add a stream handler if not already added
-if not logger.handlers:
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
 
 # Import types
 from typing import List, Dict, Optional, Any
@@ -282,12 +271,12 @@ def json_datetime_encoder(obj: Any) -> str:
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
-def get_incidents_from_security_ir() -> Optional[List[Dict]]:
+def get_incidents_from_security_ir() -> Optional[List[Dict[str, Any]]]:
     """
     Fetch all incidents from Security Incident Response with pagination support.
 
     Returns:
-        Optional[List[Dict]]: List of incidents or None if error occurs
+        Optional[List[Dict[str, Any]]]: List of incidents or None if error occurs
     """
     pagination_token = None
     incidents = []
@@ -313,12 +302,12 @@ def get_incidents_from_security_ir() -> Optional[List[Dict]]:
         return None
 
 
-def get_number_of_active_incidents(incidents: List[Dict]) -> Optional[int]:
+def get_number_of_active_incidents(incidents: List[Dict[str, Any]]) -> Optional[int]:
     """
     Count number of active (non-closed) incidents.
 
     Args:
-        incidents (List[Dict]): List of incidents to check
+        incidents (List[Dict[str, Any]]): List of incidents to check
 
     Returns:
         Optional[int]: Count of active incidents or None if error occurs
@@ -333,7 +322,7 @@ def get_number_of_active_incidents(incidents: List[Dict]) -> Optional[int]:
         return None
 
 
-def update_polling_schedule_rate(rule_name: str, schedule_rate: str) -> Dict:
+def update_polling_schedule_rate(rule_name: str, schedule_rate: str) -> Dict[str, Any]:
     """
     Update EventBridge rule schedule rate.
 
@@ -342,7 +331,7 @@ def update_polling_schedule_rate(rule_name: str, schedule_rate: str) -> Dict:
         schedule_rate (str): New schedule rate expression
 
     Returns:
-        Dict: Response from EventBridge put_rule API
+        Dict[str, Any]: Response from EventBridge put_rule API
     """
     try:
         return events_client.put_rule(
@@ -354,7 +343,7 @@ def update_polling_schedule_rate(rule_name: str, schedule_rate: str) -> Dict:
         raise
 
 
-def get_incident_details(case_id: str) -> Dict:
+def get_incident_details(case_id: str) -> Dict[str, Any]:
     """
     Get detailed information for a specific incident.
 
@@ -362,7 +351,7 @@ def get_incident_details(case_id: str) -> Dict:
         case_id (str): ID of the case to retrieve
 
     Returns:
-        Dict: Dictionary containing case details and comments
+        Dict[str, Any]: Dictionary containing case details and comments
     """
     incident_request_kwargs = {"caseId": case_id}
     case_details = security_ir_client.get_case(**incident_request_kwargs)
@@ -371,15 +360,15 @@ def get_incident_details(case_id: str) -> Dict:
     return {**case_details, "caseComments": case_comments.get("items", [])}
 
 
-def remove_keys(data, keys_to_exclude):
+def remove_keys(data: Any, keys_to_exclude: List[str]) -> Any:
     """Remove specified keys from nested data structures.
 
     Args:
-        data: Data structure to process (dict, list, or other)
-        keys_to_exclude: Keys to exclude from dictionaries
+        data (Any): Data structure to process (dict, list, or other)
+        keys_to_exclude (List[str]): Keys to exclude from dictionaries
 
     Returns:
-        Processed data structure with specified keys removed
+        Any: Processed data structure with specified keys removed
     """
     if isinstance(data, dict):
         return {
@@ -394,13 +383,13 @@ def remove_keys(data, keys_to_exclude):
 
 
 def store_incidents_in_dynamodb(
-    incidents: List[Dict], table_name: str, event_bus_name="default"
+    incidents: List[Dict[str, Any]], table_name: str, event_bus_name: str = "default"
 ) -> bool:
     """
     Store or update incidents in DynamoDB.
 
     Args:
-        incidents (List[Dict]): List of incidents to store
+        incidents (List[Dict[str, Any]]): List of incidents to store
         table_name (str): Name of the DynamoDB table
         event_bus_name (str): Name of the EventBridge event bus
 
@@ -512,7 +501,7 @@ def store_incidents_in_dynamodb(
         return False
 
 
-def handler(event: Dict, context: Any) -> Dict:
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler to process security incidents.
 
@@ -520,11 +509,11 @@ def handler(event: Dict, context: Any) -> Dict:
     Adjusts polling frequency based on number of active incidents.
 
     Args:
-        event (Dict): Lambda event object containing EventBridge rule information
+        event (Dict[str, Any]): Lambda event object containing EventBridge rule information
         context (Any): Lambda context object
 
     Returns:
-        Dict: Dictionary containing response status and details
+        Dict[str, Any]: Dictionary containing response status and details
     """
     # Get configuration
     table_name = os.environ.get("INCIDENTS_TABLE_NAME")

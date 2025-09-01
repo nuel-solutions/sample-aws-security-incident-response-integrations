@@ -1,6 +1,6 @@
-# ServiceNow Integration is not released yet
+# ServiceNow Integration for AWS Security Incident Response
 
-This document will provide, when its ready, an overview of the AWS Security Incident Response ServiceNow integration, including its architecture, resources, parameters, and outputs.
+This document provides an overview of the AWS Security Incident Response ServiceNow integration, including its architecture, resources, parameters, and deployment instructions.
 
 ## Deployment
 
@@ -61,9 +61,25 @@ The ServiceNow integration stack requires the following parameters during deploy
 | `serviceNowPassword` | The password for ServiceNow API access | String | Yes | `********` |
 | `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
 
-## Post Deployment
+## Post Deployment Verification
 
-Create a test Case in AWS Security Incident Response and verify it appears as Incident in Service Now
+### Test AWS to ServiceNow Flow
+1. Create a test case in AWS Security Incident Response
+2. Verify the incident appears in ServiceNow with correct details
+3. Add comments and attachments to the Security IR case
+4. Confirm they synchronize to the ServiceNow incident
+
+### Test ServiceNow to AWS Flow
+1. Create a test incident in ServiceNow
+2. Verify a corresponding case is created in AWS Security Incident Response
+3. Update the ServiceNow incident (status, comments, attachments)
+4. Confirm changes synchronize to the Security IR case
+
+### Verify Business Rules
+1. Navigate to **System Definition > Business Rules** in ServiceNow
+2. Search for rules with your resource prefix
+3. Verify both incident and attachment business rules are active
+4. Test rule execution by creating/updating incidents and attachments
 
 ## Architecture
 
@@ -190,11 +206,108 @@ The ServiceNow integration stack creates the following AWS resources:
 The ServiceNow Resource Setup Lambda creates the following components in your ServiceNow instance:
 
 1. **Business Rules**:
-   - **Incident Created Rule**: Triggers when a new incident is created in ServiceNow
-   - **Incident Updated Rule**: Triggers when an incident is updated in ServiceNow
-   - **Incident Deleted Rule**: Triggers when an incident is deleted in ServiceNow
-   - Each rule is configured to send incident data to AWS via the outbound REST message
-   - Rules are prefixed with the Lambda function name for easy identification
+   - **Incident Business Rule**: Triggers when incidents are created, updated, or deleted in ServiceNow
+     - Monitors the `incident` table
+     - Sends `IncidentCreated` or `IncidentUpdated` events to AWS
+     - Includes incident number and system ID in the payload
+   - **Attachment Business Rule**: Triggers when attachments are added, updated, or deleted on incidents
+     - Monitors the `sys_attachment` table for incident-related attachments
+     - Sends `IncidentUpdated` events when attachment changes occur
+     - Includes attachment action type (added/updated/deleted) in the payload
+     - Only processes attachments related to the incident table
+   - Rules are prefixed with the resource prefix for easy identification
+
+2. **Outbound REST Messages**:
+   - **Primary REST Message**: Handles incident and attachment event notifications
+   - **HTTP POST Function**: Configured to send JSON payloads to the API Gateway webhook
+   - **Authorization Headers**: Automatically configured with Bearer token authentication
+   - **Request Parameters**: Dynamically configured based on the event payload structure
+
+3. **Authentication**:
+   - **API Gateway Secret**: Stored in AWS Secrets Manager for secure webhook authentication
+   - **Automatic Token Rotation**: Supports token rotation via AWS Secrets Manager
+   - **Bearer Token Authentication**: Used for all webhook requests to AWS
+
+## Key Features
+
+### Bidirectional Synchronization
+- **AWS to ServiceNow**: Security IR cases automatically create/update ServiceNow incidents
+- **ServiceNow to AWS**: ServiceNow incident changes trigger updates in Security IR cases
+- **Real-time Updates**: Event-driven architecture ensures near-instantaneous synchronization
+
+### Attachment Handling
+- **Size Limits**: Attachments larger than 5MB are handled via comments with download instructions
+- **Duplicate Prevention**: Checks for existing attachment comments before adding new ones
+- **Error Handling**: Failed uploads result in informative comments with fallback instructions
+- **Bidirectional Sync**: Attachments are synchronized in both directions when possible
+
+### Comment Synchronization
+- **Bidirectional Comments**: Comments are synchronized between both systems
+- **Duplicate Prevention**: Prevents duplicate comments using content matching
+- **Update Tags**: Uses system tags to identify and skip system-generated updates
+- **Rich Content**: Supports formatted comments and work notes
+
+### Status Mapping
+- **Intelligent Mapping**: Maps Security IR case statuses to appropriate ServiceNow incident states
+- **Workflow Support**: Handles ServiceNow workflow transitions automatically
+- **Closure Handling**: Properly manages incident closure and resolution codes
+
+## Troubleshooting
+
+For detailed troubleshooting information, common issues, and diagnostic steps, please refer to the [ServiceNow Integration Troubleshooting Guide](SERVICE_NOW_TROUBLESHOOTING.md).
+
+## Security Considerations
+
+### Credential Management
+- ServiceNow credentials are stored securely in SSM Parameter Store
+- API Gateway authentication tokens are managed via AWS Secrets Manager
+- Automatic token rotation is supported for enhanced security
+
+### Network Security
+- All communications use HTTPS/TLS encryption
+- API Gateway endpoints are secured with custom authorizers
+- ServiceNow webhook requests include proper authentication headers
+
+### Access Control
+- Lambda functions use least-privilege IAM roles
+- ServiceNow integration user should have minimal required permissions
+- DynamoDB access is restricted to specific table operations
+
+## Advanced Configuration
+
+### Custom Field Mapping
+Modify the `service_now_sir_mapper.py` file to customize field mappings between ServiceNow and Security IR:
+
+```python
+FIELD_MAPPING = {
+    "short_description": "title",
+    "description": "description",
+    "comments_and_work_notes": "caseComments",
+    # Add custom field mappings here
+}
+```
+
+### Status Mapping Customization
+Update the status mapping in `service_now_sir_mapper.py`:
+
+```python
+STATUS_MAPPING = {
+    "Detection and Analysis": "2",  # In Progress
+    "Containment, Eradication and Recovery": "2",  # In Progress
+    "Post-Incident Activity": "2",  # In Progress
+    "Closed": "7",  # Closed
+    # Add custom status mappings here
+}
+```
+
+### Business Rule Customization
+The ServiceNow business rules can be customized after deployment by modifying them directly in ServiceNow or by updating the `service_now_resource_setup_handler` code and redeploying.
+
+## Additional Resources
+
+- [ServiceNow Integration Troubleshooting Guide](SERVICE_NOW_TROUBLESHOOTING.md) - Comprehensive troubleshooting, validation, and diagnostic information
+- [AWS Security Incident Response Documentation](https://docs.aws.amazon.com/security-ir/) - Official AWS Security Incident Response service documentation
+- [ServiceNow REST API Documentation](https://docs.servicenow.com/bundle/vancouver-application-development/page/integrate/inbound-rest/concept/c_RESTAPI.html) - ServiceNow REST API reference identification
 
 2. **Outbound REST Messages**:
    - **AWS Security IR Integration Message**: Configured to send incident data to the API Gateway webhook URL

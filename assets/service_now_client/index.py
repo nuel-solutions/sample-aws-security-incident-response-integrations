@@ -217,7 +217,9 @@ class ServiceNowService:
                 return None
 
             service_now_incident_attachments = (
-                self.service_now_client.get_incident_attachments(service_now_incident)
+                self.service_now_client.get_incident_attachments_details(
+                    service_now_incident
+                )
             )
 
             return self.extract_incident_details(
@@ -281,11 +283,11 @@ class ServiceNowService:
     def add_incident_comment(
         self, service_now_incident_number: str, service_now_incident_comment: str
     ) -> Optional[Any]:
-        """Update incident in ServiceNow.
+        """Add comment to incident in ServiceNow.
 
         Args:
             service_now_incident_number (str): Incident number in ServiceNow to be updated
-            service_now_fields (Dict[str, Any]): Dictionary of incident fields
+            service_now_incident_comment (str): Comment to add to the incident
 
         Returns:
             Optional[Any]: Updated ServiceNow incident or None if update fails
@@ -322,14 +324,6 @@ class ServiceNowService:
             Dict[str, Any]: Dictionary with serializable ServiceNow incident details
         """
         try:
-            attachments_list = [
-                {
-                    "filename": attachment.file_name,
-                    "content_type": attachment.content_type,
-                }
-                for attachment in service_now_incident_attachments
-            ]
-
             incident_dict = {
                 "sys_id": service_now_incident.sys_id.get_display_value(),
                 "number": service_now_incident.number.get_display_value(),
@@ -360,7 +354,7 @@ class ServiceNowService:
                 "sys_tags": service_now_incident.sys_tags.get_display_value(),
                 "category": service_now_incident.subcategory.get_display_value(),
                 "subcategory": service_now_incident.subcategory.get_display_value(),
-                "attachments": attachments_list,
+                "attachments": service_now_incident_attachments,
             }
             return incident_dict
         except Exception as e:
@@ -400,14 +394,14 @@ class IncidentService:
 
     def extract_case_details(
         self, ir_case: Dict[str, Any]
-    ) -> Tuple[Dict[str, Any], str, str, str]:
+    ) -> Tuple[Dict[str, Any], str, str, str, str, str]:
         """Extract case details from an IR case.
 
         Args:
             ir_case (Dict[str, Any]): IR case data
 
         Returns:
-            Tuple[Dict[str, Any], str, str, str]: Tuple of (ir_case_detail, ir_event_type, ir_case_id, sir_case_status)
+            Tuple[Dict[str, Any], str, str, str, str, str]: Tuple of (ir_case_detail, ir_event_type, ir_case_id, ir_case_status, ir_case_comments, ir_case_attachments)
         """
         ir_case_detail = ir_case["detail"]
         ir_event_type = ir_case_detail["eventType"]
@@ -565,6 +559,7 @@ class IncidentService:
                             ir_case_id,
                             sir_case_attachment_id,
                             sir_case_attachment_name,
+                            service_now_incident_comments,
                         )
 
             # Get ServiceNow incident latest details post all the updates and store it in DDB
@@ -600,8 +595,6 @@ class IncidentService:
         Args:
             ir_case_id (str): IR case ID
             service_now_fields (Dict[str, Any]): ServiceNow fields
-            short_description (str): Short description for the incident
-            unmapped_sir_fields_comment (str): Comments containing unmapped SIR fields
 
         Returns:
             Optional[str]: ServiceNow incident ID or None if creation fails
@@ -631,18 +624,16 @@ class IncidentService:
         ir_case_id: str,
         service_now_fields: Dict[str, Any],
         # service_now_short_description: Optional[str],
-    ):
+    ) -> Tuple[Optional[str], bool]:
         """Handle the update of an existing IR case.
 
         Args:
             ir_case_detail (Dict[str, Any]): IR case details
             ir_case_id (str): IR case ID
             service_now_fields (Dict[str, Any]): ServiceNow fields
-            unmapped_fields_comment (Optional[str]): Comments containing additional info for unmapped SIR fields
-            service_now_short_description (Optional[str]): Short description containing the AWS Security Incident Response Case Id
 
         Returns:
-            Optional[str]: ServiceNow incident ID or None if update fails
+            Tuple[Optional[str], bool]: Tuple of (ServiceNow incident ID, incident_created flag)
         """
         # Set incident_created flag to False. This flag will only be set to true if Incident does not already exist in DDB, and is created in ServiceNow for an IncidentUpdated event
         incident_created = False
@@ -686,7 +677,7 @@ class IncidentService:
 
     def check_if_attachment_exists_in_service_now_incident(
         self, service_now_incident_attachments: List[Any], sir_case_attachment_name: str
-    ):
+    ) -> bool:
         """Check if an attachment exists in a ServiceNow incident.
 
         Args:
@@ -710,8 +701,22 @@ class IncidentService:
         return False
 
     def upload_attachment_to_service_now_incident(
-        self, service_now_incident_id, ir_case_id, ir_attachment_id, ir_attachment_name
-    ):
+        self,
+        service_now_incident_id: str,
+        ir_case_id: str,
+        ir_attachment_id: str,
+        ir_attachment_name: str,
+        service_now_incident_comments: str,
+    ) -> None:
+        """Upload attachment to ServiceNow incident with size and error handling.
+
+        Args:
+            service_now_incident_id (str): ServiceNow incident ID
+            ir_case_id (str): Security IR case ID
+            ir_attachment_id (str): Security IR attachment ID
+            ir_attachment_name (str): Security IR attachment name
+            service_now_incident_comments (str): Existing ServiceNow incident comments
+        """
         # Check file size limit (5MB) to avoid 414 Request-URI Too Large error
         MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
         download_path = f"/tmp/{ir_attachment_name}"
@@ -736,10 +741,12 @@ class IncidentService:
                 logger.warning(
                     f"Attachment {ir_attachment_name} ({len(response.content)} bytes) exceeds size limit. Adding comment instead."
                 )
-                comment = f"[AWS Security IR] Large attachment '{ir_attachment_name}' ({len(response.content)} bytes) could not be uploaded due to size limits. Please download from the Security IR case."
-                self.service_now_service.add_incident_comment(
-                    service_now_incident_id, comment
-                )
+                comment = f"[AWS Security Incident Response Update] Large attachment '{ir_attachment_name}' ({len(response.content)} bytes) could not be uploaded due to size limits. Please download from the Security IR case."
+                # Check if comment already exists before adding
+                if comment not in service_now_incident_comments:
+                    self.service_now_service.add_incident_comment(
+                        service_now_incident_id, comment
+                    )
                 return
 
             with open(download_path, "wb") as f:
@@ -760,11 +767,13 @@ class IncidentService:
         except Exception as e:
             logger.error(f"Error trying to upload IR attachment: {e}")
             # Add comment about failed attachment upload
-            comment = f"[AWS Security IR] Failed to upload attachment '{ir_attachment_name}'. Please download from the Security IR case."
+            comment = f"[AWS Security Incident Response Update] Failed to upload attachment '{ir_attachment_name}'. Please download from the Security IR case."
             try:
-                self.service_now_service.add_incident_comment(
-                    service_now_incident_id, comment
-                )
+                # Check if comment already exists before adding
+                if comment not in service_now_incident_comments:
+                    self.service_now_service.add_incident_comment(
+                        service_now_incident_id, comment
+                    )
             except Exception as comment_error:
                 logger.error(
                     f"Failed to add attachment failure comment: {comment_error}"

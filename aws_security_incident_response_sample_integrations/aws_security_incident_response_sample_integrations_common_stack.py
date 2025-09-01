@@ -26,7 +26,23 @@ from .constants import (
 
 
 class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    """AWS CDK Stack for common Security Incident Response integration resources.
+
+    This stack creates shared infrastructure components including DynamoDB table,
+    EventBridge event bus, Lambda layers, and the Security IR client Lambda function.
+    """
+
+    def __init__(
+        self, scope: Construct, construct_id: str, service_now_params=None, **kwargs
+    ) -> None:
+        """Initialize the common stack.
+
+        Args:
+            scope (Construct): The scope in which to define this construct
+            construct_id (str): The scoped construct ID
+            service_now_params (dict, optional): ServiceNow configuration parameters
+            **kwargs: Additional keyword arguments passed to Stack
+        """
         super().__init__(scope, construct_id, **kwargs)
 
         """
@@ -216,6 +232,28 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             )
         )
 
+        # Build environment variables for security_ir_client
+        environment_vars = {
+            "JIRA_EVENT_SOURCE": JIRA_EVENT_SOURCE,
+            "SERVICE_NOW_EVENT_SOURCE": SERVICE_NOW_EVENT_SOURCE,
+            "INCIDENTS_TABLE_NAME": self.table.table_name,
+            "LOG_LEVEL": self.log_level_param.value_as_string,
+        }
+
+        # Add ServiceNow environment variables if provided
+        if service_now_params:
+            environment_vars.update(
+                {
+                    "SERVICE_NOW_INSTANCE_ID": service_now_params[
+                        "instance_id_param_name"
+                    ],
+                    "SERVICE_NOW_USERNAME": service_now_params["username_param_name"],
+                    "SERVICE_NOW_PASSWORD_PARAM_NAME": service_now_params[
+                        "password_param_name"
+                    ],
+                }
+            )
+
         security_ir_client = py_lambda.PythonFunction(
             self,
             "SecurityIncidentResponseClient",
@@ -223,12 +261,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             runtime=aws_lambda.Runtime.PYTHON_3_13,
             timeout=Duration.minutes(15),
             layers=[self.domain_layer, self.mappers_layer, self.wrappers_layer],
-            environment={
-                "JIRA_EVENT_SOURCE": JIRA_EVENT_SOURCE,
-                "SERVICE_NOW_EVENT_SOURCE": SERVICE_NOW_EVENT_SOURCE,
-                "INCIDENTS_TABLE_NAME": self.table.table_name,
-                "LOG_LEVEL": self.log_level_param.value_as_string,
-            },
+            environment=environment_vars,
             role=security_ir_client_role,
         )
 
@@ -265,6 +298,32 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             )
         )
 
+        # Add S3 permissions for attachment upload via presigned URLs
+        security_ir_client.add_to_role_policy(
+            aws_iam.PolicyStatement(
+                effect=aws_iam.Effect.ALLOW,
+                actions=[
+                    "s3:PutObject",
+                    "s3:PutObjectAcl",
+                ],
+                resources=["arn:aws:s3:::security-ir-*/*"],
+            )
+        )
+
+        # Add SSM permissions for ServiceNow parameters if provided
+        if service_now_params:
+            security_ir_client.add_to_role_policy(
+                aws_iam.PolicyStatement(
+                    effect=aws_iam.Effect.ALLOW,
+                    actions=["ssm:GetParameter"],
+                    resources=[
+                        f"arn:aws:ssm:{self.region}:{self.account}:parameter{service_now_params['instance_id_param_name']}",
+                        f"arn:aws:ssm:{self.region}:{self.account}:parameter{service_now_params['username_param_name']}",
+                        f"arn:aws:ssm:{self.region}:{self.account}:parameter{service_now_params['password_param_name']}",
+                    ],
+                )
+            )
+
         # Grant specific DynamoDB permissions instead of full access
         self.table.grant_read_write_data(security_ir_client)
 
@@ -276,15 +335,29 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
         )
 
         # Add suppressions for IAM5 findings related to wildcard resources
-        NagSuppressions.add_resource_suppressions(
-            security_ir_client,
-            [
+        suppressions = [
+            {
+                "id": "AwsSolutions-IAM5",
+                "reason": "Wildcard resources are required for security-ir actions",
+                "applies_to": ["Resource::*"],
+            }
+        ]
+
+        # Add SSM suppression if ServiceNow parameters are provided
+        if service_now_params:
+            suppressions.append(
                 {
                     "id": "AwsSolutions-IAM5",
-                    "reason": "Wildcard resources are required for security-ir actions",
-                    "applies_to": ["Resource::*"],
+                    "reason": "SSM parameter access required for ServiceNow integration",
+                    "applies_to": [
+                        "Resource::arn:aws:ssm:*:*:parameter/SecurityIncidentResponse/*"
+                    ],
                 }
-            ],
+            )
+
+        NagSuppressions.add_resource_suppressions(
+            security_ir_client,
+            suppressions,
             True,
         )
 

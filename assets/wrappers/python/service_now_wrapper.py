@@ -3,25 +3,13 @@ ServiceNow API wrapper for AWS Security Incident Response integration.
 This module provides a wrapper around the ServiceNow API for use in the Security Incident Response integration.
 """
 
-import os
 import logging
 import boto3
 from typing import Dict, Optional, Any, List
-from pysnc import ServiceNowClient as SnowClient, GlideRecord, Attachment, AttachmentAPI
-
-# Import mappers with fallbacks for different environments
-try:
-    # This import works for lambda function and imports the lambda layer at runtime
-    from service_now_sir_mapper import (
-        map_sir_fields_to_service_now,
-        map_case_status,
-    )
-except ImportError:
-    # This import works for local development and imports locally from the file system
-    from mappers.python.service_now_sir_mapper import (
-        map_sir_fields_to_service_now,
-        map_case_status,
-    )
+from pysnc import ServiceNowClient as SnowClient, GlideRecord
+import mimetypes
+import requests
+from base64 import b64encode
 
 # Configure logging
 logger = logging.getLogger()
@@ -50,8 +38,7 @@ class ServiceNowClient:
         self.client = self.__create_client()
 
     def __create_client(self) -> Optional[SnowClient]:
-        """
-        Create a ServiceNow client instance.
+        """Create a ServiceNow client instance.
 
         Returns:
             Optional[SnowClient]: PySNC ServiceNow client or None if creation fails
@@ -76,8 +63,7 @@ class ServiceNowClient:
             return None
 
     def __get_password(self) -> Optional[str]:
-        """
-        Fetch the ServiceNow password from SSM Parameter Store.
+        """Fetch the ServiceNow password from SSM Parameter Store.
 
         Returns:
             Optional[str]: Password or None if retrieval fails
@@ -96,15 +82,14 @@ class ServiceNowClient:
             logger.error(f"Error retrieving ServiceNow password from SSM: {str(e)}")
             return None
 
-    def __get_glide_record(self, record_type) -> GlideRecord:
-        """
-        Prepare a Glide Record using ServiceNowClient for querying.
+    def __get_glide_record(self, record_type: str) -> Optional[GlideRecord]:
+        """Prepare a Glide Record using ServiceNowClient for querying.
 
         Args:
             record_type (str): Type of ServiceNow record (e.g., 'incident')
 
         Returns:
-            GlideRecord: GlideRecord instance or None if retrieval fails
+            Optional[GlideRecord]: GlideRecord instance or None if retrieval fails
         """
         try:
             glide_record = self.client.GlideRecord(record_type)
@@ -115,9 +100,8 @@ class ServiceNowClient:
 
     def __prepare_service_now_incident(
         self, glide_record: GlideRecord, fields: Dict[str, Any]
-    ):
-        """
-        Prepare ServiceNow Glide Record for incident creation.
+    ) -> GlideRecord:
+        """Prepare ServiceNow Glide Record for incident creation.
 
         Args:
             glide_record (GlideRecord): ServiceNow Glide Record
@@ -150,15 +134,14 @@ class ServiceNowClient:
 
         return glide_record
 
-    def get_incident(self, incident_number: str) -> GlideRecord:
-        """
-        Get a ServiceNow incident by incident_number.
+    def get_incident(self, incident_number: str) -> Optional[GlideRecord]:
+        """Get a ServiceNow incident by incident_number.
 
         Args:
             incident_number (str): The ServiceNow incident number
 
         Returns:
-            GlideRecord: Incident record or None if retrieval fails
+            Optional[GlideRecord]: Incident record or None if retrieval fails
         """
         try:
             glide_record = self.__get_glide_record("incident")
@@ -175,36 +158,83 @@ class ServiceNowClient:
             )
             return None
 
-    def get_incident_attachments(self, glide_record: GlideRecord) -> List[Attachment]:
-        """
-        Get attachments for a ServiceNow incident.
+    def get_incident_attachments_details(
+        self, glide_record: GlideRecord
+    ) -> Optional[List[Dict[str, str]]]:
+        """Get attachments for a ServiceNow incident.
 
         Args:
             glide_record (GlideRecord): ServiceNow Glide Record
 
         Returns:
-            List[Attachment]: List of attachments or None if retrieval fails
+            Optional[List[Dict[str, str]]]: List of attachment details dictionaries or None if retrieval fails
         """
         try:
-            attachments = []
-            for attachment in glide_record.get_attachments():
-                attachments.append(attachment)
-            return attachments
+            attachments_list = []
+            attachments = glide_record.get_attachments()
+            for attachment in attachments:
+                attachment_details = {
+                    "filename": attachment.file_name,
+                    "content_type": attachment.content_type,
+                }
+                logger.info(
+                    f"Incident attachment details for incident {glide_record.number}: {attachment_details}"
+                )
+                attachments_list.append(attachment_details)
+            return attachments_list
         except Exception as e:
             logger.error(
                 f"Error getting attachments for incident {glide_record.number} from ServiceNow: {str(e)}"
             )
             return None
 
-    def create_incident(self, fields: Dict[str, Any]) -> Optional[Any]:
+    def get_incident_attachment_data(
+        self, glide_record: GlideRecord, attachment_name: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get attachment data for a ServiceNow incident.
+
+        Args:
+            glide_record (GlideRecord): ServiceNow Glide Record
+            attachment_name (str): Name of the attachment to retrieve
+
+        Returns:
+            Optional[Dict[str, Any]]: Dictionary containing attachment content, content type, and content size, or None if retrieval fails
         """
-        Create a new ServiceNow incident.
+        try:
+            attachments = glide_record.get_attachments()
+            for attachment in attachments:
+                if attachment.file_name == attachment_name:
+                    # Temporary path to download the attachment
+                    temp_path = f"/tmp/{attachment_name}"
+                    attachment.write_to(temp_path)
+                        
+                    # Read attachment content in binary mode
+                    with open(temp_path, "rb") as f:
+                        attachment_content = f.read()
+                    
+                        # Return the complete temp path as attachment_url                    
+                        attachment_content_type = attachment.content_type
+                        attachment_content_length = attachment.size_bytes
+                        attachment_data = {
+                            "attachment_content": attachment_content,
+                            "attachment_content_type": attachment_content_type,
+                            "attachment_content_length": attachment_content_length
+                        }
+                        return attachment_data
+        except Exception as e:
+            logger.error(
+                f"Error getting attachment data for incident {glide_record.number} from ServiceNow: {str(e)}"
+            )
+            return None
+
+    def create_incident(self, fields: Dict[str, Any]) -> Optional[str]:
+        """Create a new ServiceNow incident.
 
         Args:
             fields (Dict[str, Any]): Dictionary of incident fields
 
         Returns:
-            Optional[Any]: Created ServiceNow incident number or None if creation fails
+            Optional[str]: Created ServiceNow incident number or None if creation fails
         """
         try:
             glide_record = self.__get_glide_record("incident")
@@ -221,16 +251,17 @@ class ServiceNowClient:
             logger.error(f"Incident creation failed with error: {e}")
             return None
 
-    def update_incident(self, incident_number, fields: Dict[str, Any]) -> Optional[Any]:
-        """
-        Update an existing ServiceNow incident.
+    def update_incident(
+        self, incident_number: str, fields: Dict[str, Any]
+    ) -> Optional[GlideRecord]:
+        """Update an existing ServiceNow incident.
 
         Args:
             incident_number (str): Incident number in ServiceNow to be updated
             fields (Dict[str, Any]): Dictionary of incident fields
 
         Returns:
-            Optional[Any]: Updated ServiceNow incident record or None if update fails
+            Optional[GlideRecord]: Updated ServiceNow incident record or None if update fails
         """
         try:
             # Validate that fields is a dictionary
@@ -255,16 +286,17 @@ class ServiceNowClient:
             logger.error(f"Incident update failed with error: {e}")
             return None
 
-    def add_incident_comment(self, incident_number, incident_comment) -> Optional[Any]:
-        """
-        Add a comment to an existing ServiceNow incident.
+    def add_incident_comment(
+        self, incident_number: str, incident_comment: str
+    ) -> Optional[GlideRecord]:
+        """Add a comment to an existing ServiceNow incident.
 
         Args:
             incident_number (str): Incident number in ServiceNow to be updated
             incident_comment (str): Comment to add to the incident
 
         Returns:
-            Optional[Any]: Updated ServiceNow incident record or None if update fails
+            Optional[GlideRecord]: Updated ServiceNow incident record or None if update fails
         """
         try:
             glide_record = self.__get_glide_record("incident")
@@ -286,7 +318,7 @@ class ServiceNowClient:
 
     def upload_incident_attachment(
         self, incident_number: str, attachment_name: str, attachment_path: str
-    ) -> Optional[Any]:
+    ) -> Optional[bool]:
         """Upload an attachment to a ServiceNow incident using REST API.
 
         Args:
@@ -295,11 +327,8 @@ class ServiceNowClient:
             attachment_path (str): Path to the attachment file
 
         Returns:
-            Optional[Any]: Upload result or None if upload fails
+            Optional[bool]: True if upload successful, None if upload fails
         """
-        import mimetypes
-        import requests
-        from base64 import b64encode
 
         try:
             # Get the incident record first
@@ -320,7 +349,6 @@ class ServiceNowClient:
                 headers = {
                     "Authorization": f"Basic {auth}",
                     "Content-Type": content_type,
-                    # "Accept": "application/json"
                 }
 
                 # Upload via REST API

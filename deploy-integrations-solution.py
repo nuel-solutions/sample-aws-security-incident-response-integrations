@@ -7,6 +7,14 @@ import textwrap
 
 
 def deploy_jira(args):
+    """Deploy Jira integration using CDK.
+
+    Args:
+        args: Parsed command line arguments containing Jira configuration
+
+    Returns:
+        int: Exit code (0 for success, non-zero for failure)
+    """
     try:
         cmd = [
             "npx",
@@ -42,6 +50,14 @@ def deploy_jira(args):
 
 
 def deploy_servicenow(args):
+    """Deploy ServiceNow integration using CDK.
+
+    Args:
+        args: Parsed command line arguments containing ServiceNow configuration
+
+    Returns:
+        int: Exit code (0 for success, non-zero for failure)
+    """
     try:
         # print("Service Now integration is under development/maintenance...Please wait for its release")
         cmd = [
@@ -76,6 +92,7 @@ def deploy_servicenow(args):
 
 
 def main():
+    """Main function to parse arguments and deploy integrations."""
     parser = argparse.ArgumentParser(
         description="Deploy AWS Security Incident Response Sample Integrations"
     )
@@ -138,10 +155,13 @@ def main():
             parser.print_help()
             sys.exit(1)
 
-        # If log-level is specified in subparser, it overrides the global one
-        # Otherwise, use the global log-level
+        # Handle log-level parameter priority:
+        # 1. Subparser-specific --log-level (if provided)
+        # 2. Global --log-level (if provided)
+        # 3. Default value ("error")
         if not hasattr(args, "log_level") or args.log_level is None:
-            args.log_level = parser.get_default("log_level")
+            # No subparser log-level specified, use global default
+            args.log_level = "error"
 
         exit_code = args.func(args)
         sys.exit(exit_code)
