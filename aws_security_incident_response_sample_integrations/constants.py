@@ -23,11 +23,12 @@ SLACK_INITIAL_RETRY_DELAY = 1  # seconds
 SLACK_MAX_RETRY_DELAY = 60  # seconds
 
 # Slack API and Bolt framework constants
-SLACK_BOT_TOKEN_PARAMETER = "/SecurityIncidentResponse/slackBotToken"  # nosec B105
-SLACK_SIGNING_SECRET_PARAMETER = "/SecurityIncidentResponse/slackSigningSecret"  # nosec B105
-SLACK_APP_TOKEN_PARAMETER = "/SecurityIncidentResponse/slackAppToken"  # nosec B105
+# These are SSM parameter paths, not actual secrets - safe to ignore B105 warnings
+SLACK_BOT_TOKEN_PARAMETER = "/SecurityIncidentResponse/slackBotToken"  # nosec
+SLACK_SIGNING_SECRET_PARAMETER = "/SecurityIncidentResponse/slackSigningSecret"  # nosec
+SLACK_APP_TOKEN_PARAMETER = "/SecurityIncidentResponse/slackAppToken"  # nosec
 SLACK_CLIENT_ID_PARAMETER = "/SecurityIncidentResponse/slackClientId"
-SLACK_CLIENT_SECRET_PARAMETER = "/SecurityIncidentResponse/slackClientSecret"  # nosec B105
+SLACK_CLIENT_SECRET_PARAMETER = "/SecurityIncidentResponse/slackClientSecret"  # nosec
 
 # Slack file upload limits
 SLACK_MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100MB limit for AWS SIR attachments
