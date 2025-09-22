@@ -71,11 +71,15 @@ def deploy_servicenow(args):
             "--parameters",
             f"AwsSecurityIncidentResponseSampleIntegrationsCommonStack:logLevel={args.log_level}",
             "--parameters",
+            f"AwsSecurityIncidentResponseSampleIntegrationsCommonStack:integrationModule={args.integration_module}",
+            "--parameters",
             f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowInstanceId={args.instance_id}",
             "--parameters",
             f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowUser={args.username}",
             "--parameters",
             f"AwsSecurityIncidentResponseServiceNowIntegrationStack:serviceNowPassword={args.password}",
+            "--parameters",
+            f"AwsSecurityIncidentResponseServiceNowIntegrationStack:integrationModule={args.integration_module}",
         ]
         print("\n🔄 Deploying ServiceNow integration...\n")
         # Using subprocess with a list of arguments is safe from shell injection
@@ -113,11 +117,7 @@ def main():
     jira_parser.add_argument("--url", required=True, help="Jira URL")
     jira_parser.add_argument("--token", required=True, help="Jira API token")
     jira_parser.add_argument("--project-key", required=True, help="Jira Project key")
-    jira_parser.add_argument(
-        "--log-level",
-        choices=["info", "debug", "error"],
-        help="Log level for Lambda functions (overrides global setting)",
-    )
+
     jira_parser.set_defaults(func=deploy_jira)
 
     # ServiceNow integration
@@ -134,10 +134,12 @@ def main():
         "--password", required=True, help="ServiceNow password"
     )
     servicenow_parser.add_argument(
-        "--log-level",
-        choices=["info", "debug", "error"],
-        help="Log level for Lambda functions (overrides global setting)",
+        "--integration-module",
+        choices=["itsm", "ir"],
+        required=True,
+        help="ServiceNow integration module: 'itsm' for IT Service Management or 'ir' for Incident Response",
     )
+
     servicenow_parser.set_defaults(func=deploy_servicenow)
 
     try:
@@ -149,19 +151,14 @@ def main():
                 textwrap.dedent("""
                 Please specify either 'jira' or 'service-now' as the integration type.
                 Example: deploy-integrations-solution jira --email user@example.com --url https://example.atlassian.net --token YOUR_TOKEN --project-key PROJ
-                Example: deploy-integrations-solution service-now --instance-id example --username admin --password YOUR_PASSWORD
+                Example: deploy-integrations-solution service-now --instance-id example --username admin --password YOUR_PASSWORD --integration-module itsm
             """)
             )
             parser.print_help()
             sys.exit(1)
 
-        # Handle log-level parameter priority:
-        # 1. Subparser-specific --log-level (if provided)
-        # 2. Global --log-level (if provided)
-        # 3. Default value ("error")
-        if not hasattr(args, "log_level") or args.log_level is None:
-            # No subparser log-level specified, use global default
-            args.log_level = "error"
+        # The global --log-level argument is now used for all integrations
+        print(f"DEBUG: args.log_level = {args.log_level}")
 
         exit_code = args.func(args)
         sys.exit(exit_code)

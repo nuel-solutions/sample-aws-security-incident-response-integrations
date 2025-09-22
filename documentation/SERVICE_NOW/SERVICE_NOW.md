@@ -7,11 +7,18 @@ This document provides an overview of the AWS Security Incident Response Service
 ```bash
 # Deploy the integration with a single command
 ./deploy-integrations-solution.py service-now \
-  --instance <your-servicenow-instance-id> \
+  --instance-id <your-servicenow-instance-id> \
   --username <your-servicenow-username> \
   --password <your-servicenow-password> \
+  --integration-module <itsm|ir> \
   --log-level info
 ```
+
+### Integration Module Options
+
+- **`itsm`**: IT Service Management module - Uses standard ServiceNow incident table (`incident`)
+- **`ir`**: Incident Response module - Uses ServiceNow Security Incident Response table (`sn_si_incident`)
+
 See the section below for instructions on how to obtain your ServiceNow instance id, username and password
 
 ## Prerequisites
@@ -59,6 +66,7 @@ The ServiceNow integration stack requires the following parameters during deploy
 | `serviceNowInstanceId` | The ServiceNow instance ID (subdomain of your ServiceNow URL) | String | Yes | `dev12345` (from dev12345.service-now.com) |
 | `serviceNowUser` | The username for ServiceNow API access (must have admin privileges to create business rules) | String | Yes | `admin` or `integration_user` |
 | `serviceNowPassword` | The password for ServiceNow API access | String | Yes | `********` |
+| `integrationModule` | ServiceNow integration module type | String | Yes | `itsm` (IT Service Management) or `ir` (Incident Response) |
 | `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
 
 ## Post Deployment Verification
@@ -294,7 +302,7 @@ Update the status mapping in `service_now_sir_mapper.py`:
 STATUS_MAPPING = {
     "Detection and Analysis": "2",  # In Progress
     "Containment, Eradication and Recovery": "2",  # In Progress
-    "Post-Incident Activity": "2",  # In Progress
+    "Post-incident Activities": "2",  # In Progress
     "Closed": "7",  # Closed
     # Add custom status mappings here
 }
@@ -342,10 +350,15 @@ The stack provides the following outputs that can be used for integration:
      --instance-id <your-servicenow-instance-id> \
      --username <your-servicenow-username> \
      --password <your-servicenow-password> \
+     --integration-module <itsm|ir> \
      --log-level info
    ```
    
-   Note: The `--log-level` parameter is optional and defaults to `error`. Valid values are `info`, `debug`, and `error`.
+   **Required Parameters:**
+   - `--integration-module`: Choose `itsm` for IT Service Management or `ir` for Incident Response module
+   
+   **Optional Parameters:**
+   - `--log-level`: Defaults to `error`. Valid values are `info`, `debug`, and `error`
 
 3. **Automatic Configuration**:
    - The ServiceNow Resource Setup Lambda will automatically:
@@ -384,7 +397,7 @@ A: The integration includes error handling and dead-letter queues. Failed events
 A: The base integration supports standard ServiceNow incident fields. For custom fields, you'll need to modify the Lambda functions and ServiceNow scripts.
 
 **Q: Can I use this with ServiceNow's Security Incident Response module?**  
-A: Yes, the integration can be adapted to work with ServiceNow's Security Incident Response module by modifying the business rules to target security incidents instead of standard incidents.
+A: Yes, the integration supports ServiceNow's Security Incident Response module. Use `--integration-module ir` during deployment to target the `sn_si_incident` table instead of the standard `incident` table.
 
 ### Technical Questions
 

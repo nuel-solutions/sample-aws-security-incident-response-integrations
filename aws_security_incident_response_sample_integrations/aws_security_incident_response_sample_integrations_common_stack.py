@@ -58,6 +58,16 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             default="error",
         )
 
+        # Create integration module parameter
+        self.integration_module_param = CfnParameter(
+            self,
+            "integrationModule",
+            type="String",
+            description="Integration module type ('itsm' or 'ir')",
+            allowed_values=["itsm", "ir"],
+            default="itsm",
+        )
+
         """
         cdk for dynamoDb
         """
@@ -238,6 +248,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             "SERVICE_NOW_EVENT_SOURCE": SERVICE_NOW_EVENT_SOURCE,
             "INCIDENTS_TABLE_NAME": self.table.table_name,
             "LOG_LEVEL": self.log_level_param.value_as_string,
+            "INTEGRATION_MODULE": self.integration_module_param.value_as_string,
         }
 
         # Add ServiceNow environment variables if provided
@@ -254,7 +265,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
                 }
             )
 
-        security_ir_client = py_lambda.PythonFunction(
+        self.security_ir_client = py_lambda.PythonFunction(
             self,
             "SecurityIncidentResponseClient",
             entry=path.join(path.dirname(__file__), "..", "assets/security_ir_client"),
@@ -276,11 +287,11 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             event_bus=self.event_bus,
         )
         security_ir_client_rule.add_target(
-            aws_events_targets.LambdaFunction(security_ir_client)
+            aws_events_targets.LambdaFunction(self.security_ir_client)
         )
 
         # Add permissions for Security IR API
-        security_ir_client.add_to_role_policy(
+        self.security_ir_client.add_to_role_policy(
             aws_iam.PolicyStatement(
                 effect=aws_iam.Effect.ALLOW,
                 actions=[
@@ -299,7 +310,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
         )
 
         # Add S3 permissions for attachment upload via presigned URLs
-        security_ir_client.add_to_role_policy(
+        self.security_ir_client.add_to_role_policy(
             aws_iam.PolicyStatement(
                 effect=aws_iam.Effect.ALLOW,
                 actions=[
@@ -312,7 +323,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
 
         # Add SSM permissions for ServiceNow parameters if provided
         if service_now_params:
-            security_ir_client.add_to_role_policy(
+            self.security_ir_client.add_to_role_policy(
                 aws_iam.PolicyStatement(
                     effect=aws_iam.Effect.ALLOW,
                     actions=["ssm:GetParameter"],
@@ -325,12 +336,12 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             )
 
         # Grant specific DynamoDB permissions instead of full access
-        self.table.grant_read_write_data(security_ir_client)
+        self.table.grant_read_write_data(self.security_ir_client)
 
         CfnOutput(
             self,
             "SecurityIRClientLambdaArn",
-            value=security_ir_client.function_arn,
+            value=self.security_ir_client.function_arn,
             description="Security Incident Response Client Lambda Function ARN",
         )
 
@@ -356,7 +367,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             )
 
         NagSuppressions.add_resource_suppressions(
-            security_ir_client,
+            self.security_ir_client,
             suppressions,
             True,
         )
@@ -373,6 +384,29 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             ],
             True,
         )
+
+    def update_security_ir_client_env(self, service_now_params):
+        """Update security_ir_client environment variables with ServiceNow parameters.
+
+        Args:
+            service_now_params (dict): ServiceNow configuration parameters
+        """
+        if service_now_params:
+            # Add ServiceNow environment variables to existing environment
+            self.security_ir_client.add_environment(
+                "SERVICE_NOW_INSTANCE_ID", service_now_params["instance_id_param_name"]
+            )
+            self.security_ir_client.add_environment(
+                "SERVICE_NOW_USERNAME", service_now_params["username_param_name"]
+            )
+            self.security_ir_client.add_environment(
+                "SERVICE_NOW_PASSWORD_PARAM_NAME",
+                service_now_params["password_param_name"],
+            )
+            self.security_ir_client.add_environment(
+                "INTEGRATION_MODULE",
+                service_now_params.get("integration_module", "itsm"),
+            )
 
         # Add stack-level suppressions for all resources
         NagSuppressions.add_stack_suppressions(

@@ -83,6 +83,8 @@ in the command-line using the following steps:
 
 **See [ServiceNow documentation](documentation/SERVICE_NOW/SERVICE_NOW.md) for detailed instructions on how to deploy ServiceNow integration.**
 
+**Note:** ServiceNow integration now supports both ITSM (IT Service Management) and IR (Incident Response) modules. Specify the appropriate module during deployment using the `--integration-module` parameter.
+
 #### Extending to Additional Integration Targets
 
 **See [Extending Integrations with Generative AI](documentation/EXTENDING_INTEGRATIONS.md) for detailed instructions on how to use AI assistance to add support for additional incident management platforms beyond Jira and ServiceNow.**
@@ -108,6 +110,7 @@ This repository contains:
   - [Detailed Jira integration documentation](documentation/JIRA/JIRA.md)
 - **Full-featured ServiceNow Integration**:
   - Create, update, and delete incidents in ServiceNow based on AWS Security Incident Response cases
+  - Support for both ITSM (IT Service Management) and IR (Incident Response) modules
   - Automatic setup of ServiceNow components (Business Rules, REST Messages)
   - [Detailed ServiceNow integration documentation](documentation/SERVICE_NOW/SERVICE_NOW.md)
 - **Robust Error Handling**: Dead-letter queues, CloudWatch alarms, and comprehensive logging

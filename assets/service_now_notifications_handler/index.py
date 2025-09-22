@@ -16,7 +16,6 @@ from typing import Dict, Any, Optional, List, Union
 import boto3
 from boto3.dynamodb.conditions import Attr
 from botocore.exceptions import ClientError
-from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities.typing import LambdaContext
 
 try:
@@ -31,9 +30,11 @@ EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "service-now")
 
 # Configure logging
 logger = logging.getLogger()
+logger.setLevel(logging.INFO)  # Set to INFO first
 
 # Get log level from environment variable
 log_level = os.environ.get("LOG_LEVEL", "error").lower()
+print(f"LOG_LEVEL environment variable: {log_level}")  # Debug print
 if log_level == "debug":
     logger.setLevel(logging.DEBUG)
 elif log_level == "info":
@@ -41,6 +42,31 @@ elif log_level == "info":
 else:
     # Default to ERROR level
     logger.setLevel(logging.ERROR)
+
+print(f"Logger level set to: {logger.level}")  # Debug print
+
+# # Configure logging
+# logger = logging.getLogger()
+
+# # Get log level from environment variable
+# log_level = os.environ.get("LOG_LEVEL", "error").lower()
+# if log_level == "debug":
+#     logger.setLevel(logging.DEBUG)
+# elif log_level == "info":
+#     logger.setLevel(logging.INFO)
+# else:
+#     # Default to ERROR level
+#     logger.setLevel(logging.ERROR)
+
+# # Ensure handler exists and set level
+# if not logger.handlers:
+#     handler = logging.StreamHandler()
+#     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+#     logger.addHandler(handler)
+
+# # Set handler level to match logger level
+# for handler in logger.handlers:
+#     handler.setLevel(logger.level)
 
 # Initialize AWS clients
 events_client = boto3.client("events")
@@ -533,68 +559,7 @@ class ServiceNowService:
             instance_id, username, password_param_name
         )
 
-    def __extract_incident_details(
-        self, service_now_incident: Any, service_now_incident_attachments: Any
-    ) -> Dict[str, Any]:
-        """
-        Extract relevant details from a ServiceNow incident object into a serializable dictionary
 
-        Args:
-            service_now_incident: ServiceNow incident object
-
-        Returns:
-            Dictionary with serializable ServiceNow incident details
-        """
-        try:
-            incident_dict = {
-                "sys_id": service_now_incident.sys_id.get_display_value(),
-                "number": service_now_incident.number.get_display_value(),
-                "short_description": service_now_incident.short_description.get_display_value(),
-                "description": service_now_incident.description.get_display_value(),
-                "sys_created_on": service_now_incident.sys_created_on.get_display_value(),
-                "sys_created_by": service_now_incident.sys_created_by.get_display_value(),
-                "resolved_by": service_now_incident.resolved_by.get_display_value(),
-                "resolved_at": service_now_incident.resolved_at.get_display_value(),
-                "opened_at": service_now_incident.opened_at.get_display_value(),
-                "closed_at": service_now_incident.closed_at.get_display_value(),
-                "state": service_now_incident.state.get_display_value(),
-                "impact": service_now_incident.impact.get_display_value(),
-                "active": service_now_incident.active.get_display_value(),
-                "priority": service_now_incident.priority.get_display_value(),
-                "caller_id": service_now_incident.caller_id.get_display_value(),
-                "urgency": service_now_incident.urgency.get_display_value(),
-                "severity": service_now_incident.severity.get_display_value(),
-                "comments": service_now_incident.comments.get_display_value(),
-                "work_notes": service_now_incident.work_notes.get_display_value(),
-                "comments_and_work_notes": service_now_incident.comments_and_work_notes.get_display_value(),
-                "close_code": service_now_incident.close_code.get_display_value(),
-                "close_notes": service_now_incident.close_notes.get_display_value(),
-                "closed_by": service_now_incident.closed_by.get_display_value(),
-                "reopened_by": service_now_incident.reopened_by.get_display_value(),
-                "assigned_to": service_now_incident.assigned_to.get_display_value(),
-                "due_date": service_now_incident.due_date.get_display_value(),
-                "sys_tags": service_now_incident.sys_tags.get_display_value(),
-                "category": service_now_incident.subcategory.get_display_value(),
-                "subcategory": service_now_incident.subcategory.get_display_value(),
-                "attachments": service_now_incident_attachments,
-            }
-            return incident_dict
-        except Exception as e:
-            logger.error(f"Error extracting ServiceNow incident details: {str(e)}")
-            # Return minimal details if extraction fails
-            return {
-                "id": (
-                    service_now_incident.id
-                    if hasattr(service_now_incident, "id")
-                    else None
-                ),
-                "key": (
-                    service_now_incident.key
-                    if hasattr(service_now_incident, "key")
-                    else None
-                ),
-                "error": str(e),
-            }
 
     def _get_incident_details(
         self, service_now_incident_id: str
@@ -609,12 +574,13 @@ class ServiceNowService:
             Dictionary of incident details or None if retrieval fails
         """
         try:
-            service_now_incident = self.service_now_client.get_incident(
-                service_now_incident_id
+            integration_module = os.environ.get("INTEGRATION_MODULE", "itsm")
+            service_now_incident = self.service_now_client.get_incident_with_display_values(
+                service_now_incident_id, integration_module
             )
             service_now_incident_attachments = (
                 self.service_now_client.get_incident_attachments_details(
-                    service_now_incident
+                    service_now_incident_id, integration_module
                 )
             )
             if not service_now_incident:
@@ -622,10 +588,14 @@ class ServiceNowService:
                     f"Failed to get incident {service_now_incident_id} from ServiceNow"
                 )
                 return None
-
-            return self.__extract_incident_details(
+        
+            return self.service_now_client.extract_incident_details(
                 service_now_incident, service_now_incident_attachments
             )
+
+            # return self.__extract_incident_details(
+            #     service_now_incident, service_now_incident_attachments
+            # )
         except Exception as e:
             logger.error(f"Error getting incident details from ServiceNow: {str(e)}")
             return None
@@ -643,6 +613,76 @@ class ServiceNowMessageProcessorService:
             instance_id, username, password_param_name
         )
         self.event_publisher_service = EventPublisherService(event_bus_name)
+
+    # def __extract_incident_details(
+    #     self, service_now_incident: Any, service_now_incident_attachments: Any
+    # ) -> Dict[str, Any]:
+    #     """Extract relevant details from a ServiceNow incident object into a serializable dictionary.
+
+    #     Args:
+    #         service_now_incident (Any): ServiceNow incident object
+    #         service_now_incident_attachments (Any): ServiceNow incident attachments
+
+    #     Returns:
+    #         Dict[str, Any]: Dictionary with serializable ServiceNow incident details
+    #     """
+    #     try:
+    #         def safe_get_display_value(attr):
+    #             """Safely get display value from ServiceNow attribute."""
+    #             try:
+    #                 return attr.get_display_value() if attr and hasattr(attr, 'get_display_value') else None
+    #             except (AttributeError, TypeError):
+    #                 return None
+
+    #         incident_dict = {
+    #             "sys_id": safe_get_display_value(getattr(service_now_incident, 'sys_id', None)),
+    #             "number": safe_get_display_value(getattr(service_now_incident, 'number', None)),
+    #             "short_description": safe_get_display_value(getattr(service_now_incident, 'short_description', None)),
+    #             "description": safe_get_display_value(getattr(service_now_incident, 'description', None)),
+    #             "sys_created_on": safe_get_display_value(getattr(service_now_incident, 'sys_created_on', None)),
+    #             "sys_created_by": safe_get_display_value(getattr(service_now_incident, 'sys_created_by', None)),
+    #             "resolved_by": safe_get_display_value(getattr(service_now_incident, 'resolved_by', None)),
+    #             "resolved_at": safe_get_display_value(getattr(service_now_incident, 'resolved_at', None)),
+    #             "opened_at": safe_get_display_value(getattr(service_now_incident, 'opened_at', None)),
+    #             "closed_at": safe_get_display_value(getattr(service_now_incident, 'closed_at', None)),
+    #             "state": safe_get_display_value(getattr(service_now_incident, 'state', None)),
+    #             "impact": safe_get_display_value(getattr(service_now_incident, 'impact', None)),
+    #             "active": safe_get_display_value(getattr(service_now_incident, 'active', None)),
+    #             "priority": safe_get_display_value(getattr(service_now_incident, 'priority', None)),
+    #             "caller_id": safe_get_display_value(getattr(service_now_incident, 'caller_id', None)),
+    #             "urgency": safe_get_display_value(getattr(service_now_incident, 'urgency', None)),
+    #             "severity": safe_get_display_value(getattr(service_now_incident, 'severity', None)),
+    #             "comments": safe_get_display_value(getattr(service_now_incident, 'comments', None)),
+    #             "work_notes": safe_get_display_value(getattr(service_now_incident, 'work_notes', None)),
+    #             "comments_and_work_notes": safe_get_display_value(getattr(service_now_incident, 'comments_and_work_notes', None)),
+    #             "close_code": safe_get_display_value(getattr(service_now_incident, 'close_code', None)),
+    #             "close_notes": safe_get_display_value(getattr(service_now_incident, 'close_notes', None)),
+    #             "closed_by": safe_get_display_value(getattr(service_now_incident, 'closed_by', None)),
+    #             "reopened_by": safe_get_display_value(getattr(service_now_incident, 'reopened_by', None)),
+    #             "assigned_to": safe_get_display_value(getattr(service_now_incident, 'assigned_to', None)),
+    #             "due_date": safe_get_display_value(getattr(service_now_incident, 'due_date', None)),
+    #             "sys_tags": safe_get_display_value(getattr(service_now_incident, 'sys_tags', None)),
+    #             "category": safe_get_display_value(getattr(service_now_incident, 'category', None)),
+    #             "subcategory": safe_get_display_value(getattr(service_now_incident, 'subcategory', None)),
+    #             "attachments": service_now_incident_attachments,
+    #         }
+    #         return incident_dict
+    #     except Exception as e:
+    #         logger.error(f"Error extracting ServiceNow incident details: {str(e)}")
+    #         # Return minimal details if extraction fails
+    #         return {
+    #             "id": (
+    #                 service_now_incident.id
+    #                 if hasattr(service_now_incident, "id")
+    #                 else None
+    #             ),
+    #             "key": (
+    #                 service_now_incident.key
+    #                 if hasattr(service_now_incident, "key")
+    #                 else None
+    #             ),
+    #             "error": str(e),
+    #         }
 
     def _extract_event_body(self, event):
         """

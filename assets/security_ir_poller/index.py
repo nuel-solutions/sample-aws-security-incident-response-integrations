@@ -19,7 +19,6 @@ else:
     logger.setLevel(logging.ERROR)
 
 
-
 # Import types
 from typing import List, Dict, Optional, Any
 
