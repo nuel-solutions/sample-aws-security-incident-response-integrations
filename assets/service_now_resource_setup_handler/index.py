@@ -780,6 +780,7 @@ class ServiceNowApiService:
             )
             return None
 
+
 def handler(event, context):
     """
     Custom resource handler to create ServiceNow resources.
@@ -865,7 +866,6 @@ def handler(event, context):
                 service_now_api_outbound_rest_message_request_function_name,
                 service_now_resource_prefix,
             )
-        
 
         return {"Status": "SUCCESS", "PhysicalResourceId": "service-now-api-setup"}
 

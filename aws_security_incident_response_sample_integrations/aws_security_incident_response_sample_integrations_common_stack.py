@@ -13,7 +13,6 @@ from aws_cdk import (
     aws_dynamodb as dynamodb,
     aws_events as events,
     aws_logs,
-    aws_sqs,
 )
 from .event_bus_logger_construct import EventBusLoggerConstruct
 from cdk_nag import NagSuppressions
@@ -385,6 +384,39 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             True,
         )
 
+        # Add suppressions for poller role policy
+        NagSuppressions.add_resource_suppressions(
+            poller_role,
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "Poller role requires wildcard permissions for CloudWatch Logs and security-ir actions",
+                    "applies_to": [
+                        "Resource::*",
+                        "Resource::arn:aws:logs:*:*:log-group:/aws/lambda/*",
+                    ],
+                }
+            ],
+            True,
+        )
+
+        # Add suppressions for security IR client role policy
+        NagSuppressions.add_resource_suppressions(
+            security_ir_client_role,
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "Security IR client role requires wildcard permissions for CloudWatch Logs, security-ir actions, and S3 attachments",
+                    "applies_to": [
+                        "Resource::*",
+                        "Resource::arn:aws:logs:*:*:log-group:/aws/lambda/*",
+                        "Resource::arn:aws:s3:::security-ir-*/*",
+                    ],
+                }
+            ],
+            True,
+        )
+
     def update_security_ir_client_env(self, service_now_params):
         """Update security_ir_client environment variables with ServiceNow parameters.
 
@@ -429,6 +461,46 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
                     "id": "AwsSolutions-L1",
                     "reason": "Using the latest available runtime for Python (3.13)",
                 },
+            ],
+        )
+
+        # Add suppressions for the DLQ in EventBusLogger
+        NagSuppressions.add_resource_suppressions_by_path(
+            self,
+            f"/{self.stack_name}/SecurityIncidentEventBusLogger/deadletter-queue",
+            [
+                {
+                    "id": "AwsSolutions-SQS3",
+                    "reason": "This is a DLQ for EventBridge events and doesn't need its own DLQ",
+                }
+            ],
+        )
+
+        # Add suppressions for EventBridge custom resource policy
+        NagSuppressions.add_resource_suppressions_by_path(
+            self,
+            f"/{self.stack_name}/EventsLogGroupPolicysecurityteststackSecurityIncidentEventBusLoggerEventBusLoggerRule9FE75D93/CustomResourcePolicy",
+            [
+                {
+                    "id": "AwsSolutions-IAM5",
+                    "reason": "EventBridge custom resource requires wildcard permissions to manage log group policies",
+                    "applies_to": ["Resource::*"],
+                }
+            ],
+        )
+
+        # Add suppressions for AWS managed policy in custom resource
+        NagSuppressions.add_resource_suppressions_by_path(
+            self,
+            f"/{self.stack_name}/AWS679f53fac002430cb0da5b7982bd2287/ServiceRole",
+            [
+                {
+                    "id": "AwsSolutions-IAM4",
+                    "reason": "AWS CDK custom resource provider requires AWSLambdaBasicExecutionRole managed policy",
+                    "applies_to": [
+                        "Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                    ],
+                }
             ],
         )
 

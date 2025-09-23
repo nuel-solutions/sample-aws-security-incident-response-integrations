@@ -11,7 +11,6 @@ import requests
 from typing import Dict, Optional, Any, Tuple, List
 import boto3
 from botocore.exceptions import ClientError
-from pysnc import GlideRecord
 
 try:
     # This import works for lambda function and imports the lambda layer at runtime
@@ -214,8 +213,10 @@ class ServiceNowService:
             Optional[Dict[str, Any]]: Dictionary of incident details or None if retrieval fails
         """
         try:
-            service_now_incident_with_display_values = self.service_now_client.get_incident_with_display_values(
-                service_now_incident_id, integration_module
+            service_now_incident_with_display_values = (
+                self.service_now_client.get_incident_with_display_values(
+                    service_now_incident_id, integration_module
+                )
             )
             if not service_now_incident_with_display_values:
                 logger.error(
@@ -230,7 +231,8 @@ class ServiceNowService:
             )
 
             return self.service_now_client.extract_incident_details(
-                service_now_incident_with_display_values, service_now_incident_attachments
+                service_now_incident_with_display_values,
+                service_now_incident_attachments,
             )
         except Exception as e:
             logger.error(f"Error getting incident details from ServiceNow: {str(e)}")
@@ -286,27 +288,34 @@ class ServiceNowService:
                     service_now_incident_number, integration_module
                 )
                 service_now_incident_state = service_now_incident["state"]
-                if service_now_incident_state in ["Contain", "Eradicate", "Recover", "18", "19", "20"] and service_now_fields["state"] == "18":
+                if (
+                    service_now_incident_state
+                    in ["Contain", "Eradicate", "Recover", "18", "19", "20"]
+                    and service_now_fields["state"] == "18"
+                ):
                     service_now_fields["state"] = service_now_incident_state
-            
+
             service_now_incident = self.service_now_client.update_incident(
                 service_now_incident_number, service_now_fields, integration_module
             )
-            
+
             if not service_now_incident:
                 logger.error("Failed to update incident in ServiceNow")
                 return None
             logger.info(
                 f"Updated incident in ServiceNow for: {service_now_incident_number}"
             )
-            
+
             return service_now_incident
         except Exception as e:
             logger.error(f"Error updating incident details from ServiceNow: {str(e)}")
             return None
 
     def add_incident_comment(
-        self, service_now_incident_number: str, service_now_incident_comment: str, integration_module: str = "itsm"
+        self,
+        service_now_incident_number: str,
+        service_now_incident_comment: str,
+        integration_module: str = "itsm",
     ) -> Optional[Any]:
         """Add comment to incident in ServiceNow.
 
@@ -320,7 +329,9 @@ class ServiceNowService:
         """
         try:
             service_now_incident = self.service_now_client.add_incident_comment(
-                service_now_incident_number, service_now_incident_comment, integration_module
+                service_now_incident_number,
+                service_now_incident_comment,
+                integration_module,
             )
             if not service_now_incident:
                 logger.error(
@@ -336,186 +347,6 @@ class ServiceNowService:
                 f"Error adding {service_now_incident_comment} comment to incident {service_now_incident_number} in ServiceNow: {str(e)}"
             )
             return None
-
-    # def extract_incident_details(
-    #     self, service_now_incident: Dict[str, Any], service_now_incident_attachments: Any
-    # ) -> Dict[str, Any]:
-    #     """Extract relevant details from a ServiceNow incident dictionary into a serializable dictionary.
-
-    #     Args:
-    #         service_now_incident (Dict[str, Any]): ServiceNow incident dictionary
-    #         service_now_incident_attachments (Any): ServiceNow incident attachments
-
-    #     Returns:
-    #         Dict[str, Any]: Dictionary with serializable ServiceNow incident details
-    #     """
-    #     try:
-    #         # def safe_get_display_value(attr):
-    #         #     """Safely get display value from ServiceNow attribute."""
-    #         #     if not attr:
-    #         #         return None
-    #         #     try:
-    #         #         # Try get_display_value() first
-    #         #         if hasattr(attr, 'get_display_value'):
-    #         #             return attr.get_display_value()
-    #         #         # Try direct string conversion
-    #         #         elif hasattr(attr, '__str__'):
-    #         #             return str(attr)
-    #         #         # Try direct value access
-    #         #         else:
-    #         #             return attr
-    #         #     except (AttributeError, TypeError):
-    #         #         try:
-    #         #             # Fallback to string conversion
-    #         #             return str(attr) if attr else None
-    #         #         except:
-    #         #             return None
-
-    #         # incident_dict = {
-    #         #     "sys_id": safe_get_display_value(getattr(service_now_incident, 'sys_id', None)),
-    #         #     "number": safe_get_display_value(getattr(service_now_incident, 'number', None)),
-    #         #     "short_description": safe_get_display_value(getattr(service_now_incident, 'short_description', None)),
-    #         #     "description": safe_get_display_value(getattr(service_now_incident, 'description', None)),
-    #         #     "sys_created_on": safe_get_display_value(getattr(service_now_incident, 'sys_created_on', None)),
-    #         #     "sys_created_by": safe_get_display_value(getattr(service_now_incident, 'sys_created_by', None)),
-    #         #     "resolved_by": safe_get_display_value(getattr(service_now_incident, 'resolved_by', None)),
-    #         #     "resolved_at": safe_get_display_value(getattr(service_now_incident, 'resolved_at', None)),
-    #         #     "opened_at": safe_get_display_value(getattr(service_now_incident, 'opened_at', None)),
-    #         #     "closed_at": safe_get_display_value(getattr(service_now_incident, 'closed_at', None)),
-    #         #     "state": safe_get_display_value(getattr(service_now_incident, 'state', None)),
-    #         #     "impact": safe_get_display_value(getattr(service_now_incident, 'impact', None)),
-    #         #     "active": safe_get_display_value(getattr(service_now_incident, 'active', None)),
-    #         #     "priority": safe_get_display_value(getattr(service_now_incident, 'priority', None)),
-    #         #     "caller_id": safe_get_display_value(getattr(service_now_incident, 'caller_id', None)),
-    #         #     "urgency": safe_get_display_value(getattr(service_now_incident, 'urgency', None)),
-    #         #     "severity": safe_get_display_value(getattr(service_now_incident, 'severity', None)),
-    #         #     "comments": safe_get_display_value(getattr(service_now_incident, 'comments', None)),
-    #         #     "work_notes": safe_get_display_value(getattr(service_now_incident, 'work_notes', None)),
-    #         #     "comments_and_work_notes": safe_get_display_value(getattr(service_now_incident, 'comments_and_work_notes', None)),
-    #         #     "close_code": safe_get_display_value(getattr(service_now_incident, 'close_code', None)),
-    #         #     "close_notes": safe_get_display_value(getattr(service_now_incident, 'close_notes', None)),
-    #         #     "closed_by": safe_get_display_value(getattr(service_now_incident, 'closed_by', None)),
-    #         #     "reopened_by": safe_get_display_value(getattr(service_now_incident, 'reopened_by', None)),
-    #         #     "assigned_to": safe_get_display_value(getattr(service_now_incident, 'assigned_to', None)),
-    #         #     "due_date": safe_get_display_value(getattr(service_now_incident, 'due_date', None)),
-    #         #     "sys_tags": safe_get_display_value(getattr(service_now_incident, 'sys_tags', None)),
-    #         #     "category": safe_get_display_value(getattr(service_now_incident, 'category', None)),
-    #         #     "subcategory": safe_get_display_value(getattr(service_now_incident, 'subcategory', None)),
-    #         #     "attachments": service_now_incident_attachments,
-    #         # }
-    #         # incident_dict = {
-    #         #     "sys_id": service_now_incident.sys_id.get_display_value() if service_now_incident.sys_id else None,
-    #         #     "number": service_now_incident.number.get_display_value() if service_now_incident.number else None,
-    #         #     "short_description": service_now_incident.short_description.get_display_value() if service_now_incident.short_description else None,
-    #         #     "description": service_now_incident.description.get_display_value() if service_now_incident.description else None,
-    #         #     "sys_created_on": service_now_incident.sys_created_on.get_display_value() if service_now_incident.sys_created_on else None,
-    #         #     "sys_created_by": service_now_incident.sys_created_by.get_display_value() if service_now_incident.sys_created_by else None,
-    #         #     "resolved_by": service_now_incident.resolved_by.get_display_value() if service_now_incident.resolved_by else None,
-    #         #     "resolved_at": service_now_incident.resolved_at.get_display_value() if service_now_incident.resolved_at else None,
-    #         #     "opened_at": service_now_incident.opened_at.get_display_value() if service_now_incident.opened_at else None,
-    #         #     "closed_at": service_now_incident.closed_at.get_display_value() if service_now_incident.closed_at else None,
-    #         #     "state": service_now_incident.state.get_display_value() if service_now_incident.state else None,
-    #         #     "impact": service_now_incident.impact.get_display_value() if service_now_incident.impact else None,
-    #         #     "active": service_now_incident.active.get_display_value() if service_now_incident.active else None,
-    #         #     "priority": service_now_incident.priority.get_display_value() if service_now_incident.priority else None,
-    #         #     "caller_id": service_now_incident.caller_id.get_display_value() if service_now_incident.caller_id else None,
-    #         #     "urgency": service_now_incident.urgency.get_display_value() if service_now_incident.urgency else None,
-    #         #     "severity": service_now_incident.severity.get_display_value() if service_now_incident.severity else None,
-    #         #     "comments": service_now_incident.comments.get_display_value() if service_now_incident.comments else None,
-    #         #     "work_notes": service_now_incident.work_notes.get_display_value() if service_now_incident.work_notes else None,
-    #         #     "comments_and_work_notes": service_now_incident.comments_and_work_notes.get_display_value() if service_now_incident.comments_and_work_notes else None,
-    #         #     "close_code": service_now_incident.close_code.get_display_value() if service_now_incident.close_code else None,
-    #         #     "close_notes": service_now_incident.close_notes.get_display_value() if service_now_incident.close_notes else None,
-    #         #     "closed_by": service_now_incident.closed_by.get_display_value() if service_now_incident.closed_by else None,
-    #         #     "reopened_by": service_now_incident.reopened_by.get_display_value() if service_now_incident.reopened_by else None,
-    #         #     "assigned_to": service_now_incident.assigned_to.get_display_value() if service_now_incident.assigned_to else None,
-    #         #     "due_date": service_now_incident.due_date.get_display_value() if service_now_incident.due_date else None,
-    #         #     "sys_tags": service_now_incident.sys_tags.get_display_value() if service_now_incident.sys_tags else None,
-    #         #     "category": service_now_incident.category.get_display_value() if service_now_incident.category else None,
-    #         #     "subcategory": service_now_incident.subcategory.get_display_value() if service_now_incident.subcategory else None,
-    #         #     "attachments": service_now_incident_attachments,
-    #         # }
-    #         # incident_dict = {
-    #         #     "sys_id": service_now_incident.get_display_value("sys_id") if service_now_incident.sys_id else None,
-    #         #     "number": service_now_incident.get_display_value("number") if service_now_incident.number else None,
-    #         #     "short_description": service_now_incident.get_display_value("short_description") if service_now_incident.short_description else None,
-    #         #     "description": service_now_incident.get_display_value("description") if service_now_incident.description else None,
-    #         #     "sys_created_on": service_now_incident.get_display_value("sys_created_on") if service_now_incident.sys_created_on else None,
-    #         #     "sys_created_by": service_now_incident.get_display_value("sys_created_by") if service_now_incident.sys_created_by else None,
-    #         #     "resolved_by": service_now_incident.get_display_value("resolved_by") if service_now_incident.resolved_by else None,
-    #         #     "resolved_at": service_now_incident.get_display_value("resolved_at") if service_now_incident.resolved_at else None,
-    #         #     "opened_at": service_now_incident.get_display_value("opened_at") if service_now_incident.opened_at else None,
-    #         #     "closed_at": service_now_incident.get_display_value("closed_at") if service_now_incident.closed_at else None,
-    #         #     "state": service_now_incident.get_display_value("state") if service_now_incident.state else None,
-    #         #     "impact": service_now_incident.get_display_value("impact") if service_now_incident.impact else None,
-    #         #     "active": service_now_incident.get_display_value("active") if service_now_incident.active else None,
-    #         #     "priority": service_now_incident.get_display_value("priority") if service_now_incident.priority else None,
-    #         #     "caller_id": service_now_incident.get_display_value("caller_id") if service_now_incident.caller_id else None,
-    #         #     "urgency": service_now_incident.get_display_value("urgency") if service_now_incident.urgency else None,
-    #         #     "severity": service_now_incident.get_display_value("severity") if service_now_incident.severity else None,
-    #         #     "comments": service_now_incident.get_display_value("comments") if service_now_incident.comments else None,
-    #         #     "work_notes": service_now_incident.get_display_value("work_notes") if service_now_incident.work_notes else None,
-    #         #     "comments_and_work_notes": service_now_incident.get_display_value("comments_and_work_notes") if service_now_incident.comments_and_work_notes else None,
-    #         #     "close_code": service_now_incident.get_display_value("close_code") if service_now_incident.close_code else None,
-    #         #     "close_notes": service_now_incident.get_display_value("close_notes") if service_now_incident.close_notes else None,
-    #         #     "closed_by": service_now_incident.get_display_value("closed_by") if service_now_incident.closed_by else None,
-    #         #     "reopened_by": service_now_incident.get_display_value("reopened_by") if service_now_incident.reopened_by else None,
-    #         #     "assigned_to": service_now_incident.get_display_value("assigned_to") if service_now_incident.assigned_to else None,
-    #         #     "due_date": service_now_incident.get_display_value("due_date") if service_now_incident.due_date else None,
-    #         #     "sys_tags": service_now_incident.get_display_value("sys_tags") if service_now_incident.sys_tags else None,
-    #         #     "category": service_now_incident.get_display_value("category") if service_now_incident.category else None,
-    #         #     "subcategory": service_now_incident.get_display_value("subcategory") if service_now_incident.subcategory else None,
-    #         #     "attachments": service_now_incident_attachments,
-    #         # }
-    #         incident_dict = {
-    #             "sys_id": service_now_incident.get("sys_id"),
-    #             "number": service_now_incident.get("number"),
-    #             "short_description": service_now_incident.get("short_description"),
-    #             "description": service_now_incident.get("description"),
-    #             "sys_created_on": service_now_incident.get("sys_created_on"),
-    #             "sys_created_by": service_now_incident.get("sys_created_by"),
-    #             "resolved_by": service_now_incident.get("resolved_by"),
-    #             "resolved_at": service_now_incident.get("resolved_at"),
-    #             "opened_at": service_now_incident.get("opened_at"),
-    #             "closed_at": service_now_incident.get("closed_at"),
-    #             "state": service_now_incident.get("state"),
-    #             "impact": service_now_incident.get("impact"),
-    #             "active": service_now_incident.get("active"),
-    #             "priority": service_now_incident.get("priority"),
-    #             "caller_id": service_now_incident.get("caller_id"),
-    #             "urgency": service_now_incident.get("urgency"),
-    #             "severity": service_now_incident.get("severity"),
-    #             "comments": service_now_incident.get("comments"),
-    #             "work_notes": service_now_incident.get("work_notes"),
-    #             "comments_and_work_notes": service_now_incident.get("comments_and_work_notes"),
-    #             "close_code": service_now_incident.get("close_code"),
-    #             "close_notes": service_now_incident.get("close_notes"),
-    #             "closed_by": service_now_incident.get("closed_by"),
-    #             "reopened_by": service_now_incident.get("reopened_by"),
-    #             "assigned_to": service_now_incident.get("assigned_to"),
-    #             "due_date": service_now_incident.get("due_date"),
-    #             "sys_tags": service_now_incident.get("sys_tags"),
-    #             "category": service_now_incident.get("category"),
-    #             "subcategory": service_now_incident.get("subcategory"),
-    #             "attachments": service_now_incident_attachments,
-    #         }
-    #         return incident_dict
-    #     except Exception as e:
-    #         logger.error(f"Error extracting ServiceNow incident details: {str(e)}")
-    #         # Return minimal details if extraction fails
-    #         return {
-    #             "id": (
-    #                 service_now_incident.id
-    #                 if hasattr(service_now_incident, "id")
-    #                 else None
-    #             ),
-    #             "key": (
-    #                 service_now_incident.key
-    #                 if hasattr(service_now_incident, "key")
-    #                 else None
-    #             ),
-    #             "error": str(e),
-    #         }
 
 
 class IncidentService:
@@ -640,9 +471,6 @@ class IncidentService:
                 ir_case_detail, ir_case_id, integration_module
             )
 
-            # # Get short description mapping
-            # service_now_short_description = f"{ir_case_detail.get('title', 'SIR Case')} - AWS Security Incident Response Case#{ir_case_id}"
-
             # Get unmapped fields comments
             unmapped_sir_fields_comment = (
                 convert_unmapped_fields_to_string_for_snow_comments(ir_case_detail)
@@ -679,12 +507,12 @@ class IncidentService:
             logger.info(f"ServiceNow incident details: {service_now_incident}")
 
             # Map Security IR case comments to ServiceNow incident
-            service_now_incident_comments = service_now_incident.get(
-                "comments_and_work_notes"
-            ) if service_now_incident else None
-            # service_now_incident_comments = service_now_incident[
-            #     "work_notes"
-            # ]
+            service_now_incident_comments = (
+                service_now_incident.get("comments_and_work_notes")
+                if service_now_incident
+                else None
+            )
+
             if sir_case_comments:
                 comments_to_be_added = map_sir_case_comments_to_service_now_incident(
                     sir_case_comments, service_now_incident_comments
@@ -699,9 +527,11 @@ class IncidentService:
                 )
 
             # Map Security IR case attachments to ServiceNow incident
-            service_now_incident_attachments = service_now_incident.get(
-                "attachments"
-            ) if service_now_incident else None
+            service_now_incident_attachments = (
+                service_now_incident.get("attachments")
+                if service_now_incident
+                else None
+            )
             if sir_case_attachments:
                 logger.info(
                     "Uploading Security IR case attachments to ServiceNow incident"
@@ -761,8 +591,6 @@ class IncidentService:
         Returns:
             Optional[str]: ServiceNow incident ID or None if creation fails
         """
-        # # Ensure base fields are set for incident creation in ServiceNow
-        # service_now_fields["short_description"] = short_description
 
         # Create new incident in ServiceNow
         service_now_incident_number = self.service_now_service.create_incident(
@@ -908,7 +736,10 @@ class IncidentService:
                 )
                 comment = f"[AWS Security Incident Response Update] Large attachment '{ir_attachment_name}' ({len(response.content)} bytes) could not be uploaded due to size limits. Please download from the Security IR case."
                 # Check if comment already exists before adding
-                if not service_now_incident_comments or comment not in service_now_incident_comments:
+                if (
+                    not service_now_incident_comments
+                    or comment not in service_now_incident_comments
+                ):
                     self.service_now_service.add_incident_comment(
                         service_now_incident_id, comment, integration_module
                     )
@@ -919,7 +750,10 @@ class IncidentService:
 
             # Upload from /tmp and add to ServiceNow issue as attachment
             self.service_now_service.service_now_client.upload_incident_attachment(
-                service_now_incident_id, ir_attachment_name, download_path, integration_module
+                service_now_incident_id,
+                ir_attachment_name,
+                download_path,
+                integration_module,
             )
 
             logger.info(
@@ -935,7 +769,10 @@ class IncidentService:
             comment = f"[AWS Security Incident Response Update] Failed to upload attachment '{ir_attachment_name}'. Please download from the Security IR case."
             try:
                 # Check if comment already exists before adding
-                if not service_now_incident_comments or comment not in service_now_incident_comments:
+                if (
+                    not service_now_incident_comments
+                    or comment not in service_now_incident_comments
+                ):
                     self.service_now_service.add_incident_comment(
                         service_now_incident_id, comment, integration_module
                     )

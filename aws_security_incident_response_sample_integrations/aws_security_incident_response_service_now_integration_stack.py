@@ -15,8 +15,6 @@ from aws_cdk import (
     aws_logs,
     aws_secretsmanager,
     aws_ssm,
-    aws_sns as sns,
-    aws_sns_subscriptions as subscriptions,
     CustomResource,
     custom_resources as cr,
 )
@@ -25,7 +23,6 @@ from constructs import Construct
 from .constants import (
     SECURITY_IR_EVENT_SOURCE,
     SERVICE_NOW_EVENT_SOURCE,
-    SERVICE_NOW_AWS_ACCOUNT_ID,
 )
 from .aws_security_incident_response_sample_integrations_common_stack import (
     AwsSecurityIncidentResponseSampleIntegrationsCommonStack,
@@ -89,8 +86,6 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
             allowed_values=["itsm", "ir"],
             default="itsm",
         )
-
-
 
         # Create SSM parameters
         service_now_password_ssm_param = aws_ssm.StringParameter(
@@ -707,7 +702,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
         )
 
         # Create custom resource
-        service_now_resource_setup_cr = CustomResource(
+        CustomResource(
             self,
             "ServiceNowResourceSetupCr",
             service_token=service_now_cr_provider.service_token,

@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+"""Deployment script for AWS Security Incident Response Sample Integrations.
+
+This script provides a command-line interface for deploying Jira and ServiceNow
+integrations with AWS Security Incident Response. It handles CDK deployment
+with proper parameter passing for different integration types.
+
+Usage:
+    ./deploy-integrations-solution.py jira --email user@example.com --url https://example.atlassian.net --token TOKEN --project-key PROJ
+    ./deploy-integrations-solution.py service-now --instance-id example --username admin --password PASSWORD --integration-module itsm
+"""
 
 import argparse
 import subprocess  # nosec B404

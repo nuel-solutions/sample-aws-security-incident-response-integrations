@@ -210,7 +210,9 @@ def map_sir_case_comments_to_service_now_incident(
                 service_now_incident_comments
             )
 
-        logger.info(f"ServiceNow incident comments as a list: {service_now_incident_comments_list}")
+        logger.info(
+            f"ServiceNow incident comments as a list: {service_now_incident_comments_list}"
+        )
         for sir_case_comment in sir_case_comments_bodies:
             logger.info(f"Security IR case comment: {sir_case_comment}")
 
@@ -221,7 +223,9 @@ def map_sir_case_comments_to_service_now_incident(
             # Check if comment already exists in ServiceNow
             comment_exists = False
             for service_now_comment in service_now_incident_comments_list:
-                logger.info("Validating if AWS Security Incident Response case comment already exists in ServiceNow incident")
+                logger.info(
+                    "Validating if AWS Security Incident Response case comment already exists in ServiceNow incident"
+                )
                 logger.info(f"AWS Security IR comment: {str(sir_case_comment).strip()}")
                 logger.info(f"ServiceNow comment: {str(service_now_comment).strip()}")
                 if str(sir_case_comment).strip() == str(service_now_comment).strip():
