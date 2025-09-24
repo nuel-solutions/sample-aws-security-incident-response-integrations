@@ -339,7 +339,7 @@ class SlackAttachment:
         self,
         file_id: str,
         filename: str,
-        url: str,
+        url: Optional[str],
         size: int,
         mimetype: str,
         title: Optional[str] = None,
@@ -354,7 +354,7 @@ class SlackAttachment:
         Args:
             file_id (str): Slack file ID
             filename (str): Original filename
-            url (str): File download URL
+            url (Optional[str]): File download URL (required for file download operations)
             size (int): File size in bytes
             mimetype (str): File MIME type
             title (Optional[str]): File title
@@ -389,8 +389,7 @@ class SlackAttachment:
         if not self.filename:
             raise ValueError("Filename is required")
         
-        if not self.url:
-            raise ValueError("URL is required")
+        # URL is optional for basic validation but required for download operations
         
         if self.size < 0:
             raise ValueError("File size cannot be negative")
@@ -402,8 +401,8 @@ class SlackAttachment:
         if not re.match(r'^F[A-Z0-9]{8,}$', self.file_id):
             raise ValueError(f"Invalid Slack file ID format: {self.file_id}")
         
-        # Validate URL format
-        if not self.url.startswith(('http://', 'https://')):
+        # Validate URL format if provided
+        if self.url and not self.url.startswith(('http://', 'https://')):
             raise ValueError(f"Invalid URL format: {self.url}")
         
         # Validate user ID format if provided
@@ -415,6 +414,14 @@ class SlackAttachment:
             raise ValueError(f"Invalid Slack channel ID format: {self.channel_id}")
         
         return True
+
+    def is_downloadable(self) -> bool:
+        """Check if the attachment is ready for download operations.
+        
+        Returns:
+            bool: True if URL is available for download, False otherwise
+        """
+        return self.url is not None and self.url.startswith(('http://', 'https://'))
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert the attachment to a dictionary.
