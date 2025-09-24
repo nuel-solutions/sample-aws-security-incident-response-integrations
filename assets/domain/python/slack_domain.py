@@ -361,7 +361,7 @@ class SlackAttachment:
             timestamp (Optional[str]): Upload timestamp
             user_id (Optional[str]): User who uploaded the file
             channel_id (Optional[str]): Channel where file was shared
-            initial_comment (Optional[str]): Initial comment with the file
+            initial_comment (Optional[str]): Initial comment with the file (optional - users may upload files without comments)
         """
         self.file_id = file_id
         self.filename = filename
