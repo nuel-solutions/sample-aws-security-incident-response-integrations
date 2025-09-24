@@ -8,6 +8,14 @@ This test suite provides comprehensive coverage for all Slack domain models incl
 - Factory method testing with various input scenarios
 - Business logic validation (bot detection, command parsing)
 
+Mark this test as requiring Slack SDK dependencies.
+"""
+
+import pytest
+
+# Mark this test as requiring Slack SDK dependencies
+pytestmark = pytest.mark.requires_slack_sdk
+
 Test Coverage:
 - 62 comprehensive tests covering all public methods
 - Validation success and failure scenarios

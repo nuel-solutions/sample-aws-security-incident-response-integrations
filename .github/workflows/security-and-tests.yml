@@ -106,11 +106,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          # Install only essential test dependencies, skip problematic ones
+          # Install essential test dependencies
           pip install pytest pytest-cov pytest-mock moto types-boto3 types-requests
 
       - name: Run pytest
         run: |
-          # Run structure compliance tests and core functionality tests
-          # Avoid Slack-specific tests that require slack-bolt/slack-sdk dependencies
-          pytest tests/test_integration_structure.py tests/cdk/ tests/assets/security_ir_poller/ -v
+          # Run all tests, skip those marked as requiring external dependencies
+          pytest tests/ -v -m "not requires_slack_sdk"

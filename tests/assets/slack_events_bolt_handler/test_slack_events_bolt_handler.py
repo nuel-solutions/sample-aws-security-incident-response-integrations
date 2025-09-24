@@ -8,6 +8,9 @@ from unittest.mock import Mock, patch, MagicMock
 from moto import mock_aws
 import boto3
 
+# Mark this test as requiring Slack SDK dependencies
+pytestmark = pytest.mark.requires_slack_sdk
+
 # Import the module under test
 import sys
 import os

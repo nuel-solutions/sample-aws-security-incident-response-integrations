@@ -10,6 +10,9 @@ import boto3
 import sys
 import os
 
+# Mark this test as requiring Slack SDK dependencies
+pytestmark = pytest.mark.requires_slack_sdk
+
 # Mock environment variables before importing
 os.environ["INCIDENTS_TABLE_NAME"] = "test-incidents-table"
 os.environ["LOG_LEVEL"] = "error"
