@@ -24,6 +24,7 @@ SLACK_MAX_RETRY_DELAY = 60  # seconds
 
 # Slack API and Bolt framework constants
 # These are SSM parameter paths, not actual secrets - safe to ignore B105 warnings
+# TODO: Reconsider while working on the slack cdk story (add link to the story when available)
 SLACK_BOT_TOKEN_PARAMETER = "/SecurityIncidentResponse/slackBotToken"  # nosec
 SLACK_SIGNING_SECRET_PARAMETER = "/SecurityIncidentResponse/slackSigningSecret"  # nosec
 SLACK_APP_TOKEN_PARAMETER = "/SecurityIncidentResponse/slackAppToken"  # nosec
