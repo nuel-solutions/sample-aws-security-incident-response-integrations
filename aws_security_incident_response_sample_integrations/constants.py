@@ -46,14 +46,13 @@ SLACK_MAX_MESSAGE_LENGTH = 4000
 SLACK_MAX_BLOCKS_PER_MESSAGE = 50
 SLACK_MAX_USERS_PER_INVITE = 1000
 
-# Slack event types
+# Slack event types (only events actually used by the integration)
 SLACK_EVENT_MESSAGE = "message"
 SLACK_EVENT_FILE_SHARED = "file_shared"
 SLACK_EVENT_MEMBER_JOINED = "member_joined_channel"
 SLACK_EVENT_MEMBER_LEFT = "member_left_channel"
-SLACK_EVENT_CHANNEL_CREATED = "channel_created"
-SLACK_EVENT_CHANNEL_DELETED = "channel_deleted"
-SLACK_EVENT_CHANNEL_RENAMED = "channel_rename"
+# Note: channel_created, channel_deleted, channel_rename events are not needed
+# because the solution creates/manages channels itself for AWS Security IR cases
 
 # Slack command constants
 SLACK_COMMAND_PREFIX = "/security-ir"
