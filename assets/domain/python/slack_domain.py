@@ -611,9 +611,10 @@ class SlackCommand:
         return cls(
             command=data.get("command"),
             text=data.get("text", ""),
-            user_id=data.get("userId"),
-            channel_id=data.get("channelId"),
-            team_id=data.get("teamId"),
+            # These three fields are required by Slack API for slash commands:
+            user_id=data.get("userId"),        # Who invoked the command
+            channel_id=data.get("channelId"),  # Where command was invoked  
+            team_id=data.get("teamId"),        # Which workspace/team
             response_url=data.get("responseUrl"),
             trigger_id=data.get("triggerId"),
             user_name=data.get("userName"),
