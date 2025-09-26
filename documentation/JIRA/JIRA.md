@@ -85,18 +85,18 @@ See the section below for instructions on how to obtain your Jira email, URL, an
 1. Navigate to EC2 in AWS Console
 2. Launch a new instance
    1. Provide any `Name`
-   2. In `Application and OS images`:
-      1. Select default `Amazon Linux` OS
-      2. Select default, Free tier eligible AMI - `Amazon Linux 2023 kernel-6.1 AMI`
+   2. Keep the **default** settings for `Application and OS images`:
+      1. Keep the **default** `Amazon Linux` OS
+      2. Keep the **default**, Free tier eligible AMI - `Amazon Linux 2023 kernel-6.1 AMI`
          ![EC2-OS](../images/ec2-os.png)
    3. In `Instance type`:
       1. Select `t2.large`
          ![EC2-Instance-type](../images/ec2-instance-type.png)
    4. In `Key pair`, either select an existing key pair from the drop down or create a new one:
          ![EC2-key-pair](../images/ec2-key-pair.png)
-   5. Keep everything else as default
+   5. Keep everything else as **default**
    6. Click on `Launch Instance`
-3. Once the instance is up and running, select the instance and click on `Connect`. Then, connect using `EC2 Instance Connect`:jhg
+3. Once the instance is up and running, select the instance and click on `Connect`. Then, connect using `EC2 Instance Connect`:
       ![EC2-instance-connect](../images/ec2-instance-connect.png)
 4. Once connected, simply copy and paste the following set of commands:
    ```
