@@ -19,7 +19,7 @@ This document provides an overview of the AWS Security Incident Response Service
 - **`itsm`**: IT Service Management module - Uses standard ServiceNow incident table (`incident`)
 - **`ir`**: Incident Response module - Uses ServiceNow Security Incident Response table (`sn_si_incident`)
 
-See the section below for instructions on how to obtain your ServiceNow instance id, username and password
+See the Prerequisites section below for instructions on how to obtain your ServiceNow instance id, username and password, and install necessary tools required to deploy the integration
 
 ## Prerequisites
 
@@ -48,6 +48,67 @@ See the section below for instructions on how to obtain your ServiceNow instance
    - `incident_manager`
 
 **Best Practice:** Create a dedicated service account rather than using a personal account.
+
+### Install the necessary tools
+
+#### Using AWS Console (EC2 instance)
+
+1. Navigate to EC2 in AWS Console
+2. Launch a new instance
+   1. Provide any `Name`
+   2. In `Application and OS images`:
+      1. Select default `Amazon Linux` OS
+      2. Select default, Free tier eligible AMI - `Amazon Linux 2023 kernel-6.1 AMI`
+         ![EC2-OS](../images/ec2-os.png)
+   3. In `Instance type`:
+      1. Select `t2.large`
+         ![EC2-Instance-type](../images/ec2-instance-type.png)
+   4. In `Key pair`, either select an existing key pair from the drop down or create a new one:
+         ![EC2-key-pair](../images/ec2-key-pair.png)
+   5. Keep everything else as default
+   6. Click on `Launch Instance`
+3. Once the instance is up and running, select the instance and click on `Connect`. Then, connect using `EC2 Instance Connect`:jhg
+      ![EC2-instance-connect](../images/ec2-instance-connect.png)
+4. Once connected, simply copy and paste the following set of commands:
+   ```
+   sudo yum install git -y
+   sudo yum install docker
+   sudo yum install -y nodejs
+   sudo npm install -g aws-cdk
+   node -v
+   npm -v
+   npx -v
+   sudo yum install python3 python3-pip -y
+   git clone https://github.com/sample-aws-security-incident-response-integrations.git
+   cd sample-aws-security-incident-response-integrations/
+   pip install -r requirements.txt
+   chmod +x deploy-integrations-solution.py
+   sudo systemctl start docker.service
+   sudo chmod 666 /var/run/docker.sock
+   ```
+5. Now, run the `deploy` command from the [Deployment](#deployment) section
+
+#### Using local terminal instance
+
+1. Open a new Terminal session
+2. Copy and paste the following set of commands:
+   ```
+   sudo yum install git -y
+   sudo yum install docker
+   sudo yum install -y nodejs
+   sudo npm install -g aws-cdk
+   node -v
+   npm -v
+   npx -v
+   sudo yum install python3 python3-pip -y
+   git clone https://github.com/sample-aws-security-incident-response-integrations.git
+   cd sample-aws-security-incident-response-integrations/
+   pip install -r requirements.txt
+   chmod +x deploy-integrations-solution.py
+   sudo systemctl start docker.service
+   sudo chmod 666 /var/run/docker.sock
+   ```
+3. Now, run the `deploy` command from the [Deployment](#deployment) section
 
 ### Secure Your Credentials (Optional)
 
@@ -343,7 +404,11 @@ The stack provides the following outputs that can be used for integration:
    - Ensure you have a ServiceNow instance with admin access
    - Create a dedicated service account for the integration if needed
 
-2. **Deploy the Stack**:
+2. **Install the required tooling**
+   - Ensure you have executed the set of commands to install the necessary tooling required to perform the deployment of the integration
+   - You can do so either in AWS Console via an EC2 instance or in local bash/terminal
+  
+3. **Deploy the Stack**:
    ```bash
    # Using the deploy-integrations-solution script
    deploy-integrations-solution service-now \
@@ -360,18 +425,18 @@ The stack provides the following outputs that can be used for integration:
    **Optional Parameters:**
    - `--log-level`: Defaults to `error`. Valid values are `info`, `debug`, and `error`
 
-3. **Automatic Configuration**:
+4. **Automatic Configuration**:
    - The ServiceNow Resource Setup Lambda will automatically:
      - Create business rules in ServiceNow to detect incident changes
      - Configure outbound REST messages to send data to the API Gateway
      - Set up the webhook URL in ServiceNow
 
-4. **Verify the Setup**:
+5. **Verify the Setup**:
    - Check CloudFormation outputs for the webhook URL
    - Verify in ServiceNow that the business rules and outbound REST messages were created
    - The business rules will be prefixed with the Lambda function name for easy identification
 
-5. **Test the Integration**:
+6. **Test the Integration**:
    - Create a test incident in ServiceNow
    - Verify that the incident appears in AWS Security Incident Response
    - Update the incident in AWS and verify the changes appear in ServiceNow
