@@ -19,7 +19,7 @@ This document provides an overview of the AWS Security Incident Response Service
 - **`itsm`**: IT Service Management module - Uses standard ServiceNow incident table (`incident`)
 - **`ir`**: Incident Response module - Uses ServiceNow Security Incident Response table (`sn_si_incident`)
 
-See the Prerequisites section below for instructions on how to obtain your ServiceNow instance id, username and password, and install necessary tools required to deploy the integration
+See the Prerequisites section below for instructions on how to obtain your ServiceNow instance id, username and password, configure aws profile, and install necessary tools required to deploy the integration
 
 ## Prerequisites
 
@@ -49,6 +49,11 @@ See the Prerequisites section below for instructions on how to obtain your Servi
 
 **Best Practice:** Create a dedicated service account rather than using a personal account.
 
+### Retrieve aws credentials for configuring profile
+
+1. `AWS Access Key ID`
+2. `AWS Secret Access Key`
+
 ### Install the necessary tools
 
 #### Using AWS Console (EC2 instance)
@@ -69,7 +74,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    6. Click on `Launch Instance`
 3. Once the instance is up and running, select the instance and click on `Connect`. Then, connect using `EC2 Instance Connect`:
       ![EC2-instance-connect](../images/ec2-instance-connect.png)
-4. Once connected, simply copy and paste the following set of commands:
+4. Once connected, simply copy and paste the following set of commands (provide the `AWS Access Key ID` and `AWS Secret Access Key` when prompted):
    ```
    sudo yum install git -y
    sudo yum install docker
@@ -85,13 +90,14 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    chmod +x deploy-integrations-solution.py
    sudo systemctl start docker.service
    sudo chmod 666 /var/run/docker.sock
+   aws configure
    ```
 5. Now, run the `deploy` command from the [Deployment](#deployment) section
 
 #### Using local terminal instance
 
 1. Open a new Terminal session
-2. Copy and paste the following set of commands:
+2. Copy and paste the following set of commands (provide the `AWS Access Key ID` and `AWS Secret Access Key` when prompted):
    ```
    sudo yum install git -y
    sudo yum install docker
@@ -107,6 +113,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    chmod +x deploy-integrations-solution.py
    sudo systemctl start docker.service
    sudo chmod 666 /var/run/docker.sock
+   aws configure
    ```
 3. Now, run the `deploy` command from the [Deployment](#deployment) section
 
