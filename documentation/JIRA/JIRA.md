@@ -78,6 +78,12 @@ See the section below for instructions on how to obtain your Jira email, URL, an
 2. Note the project key (e.g., "SEC" or "SECURITY")
 3. Ensure you have appropriate permissions in this project
 
+### Retrieve aws credentials for configuring profile
+
+1. `AWS Access Key ID`
+2. `AWS Secret Access Key`
+3. `AWS Session Token`
+
 ### Install the necessary tools
 
 #### Using AWS Console (EC2 instance)
@@ -115,7 +121,13 @@ See the section below for instructions on how to obtain your Jira email, URL, an
    sudo systemctl start docker.service
    sudo chmod 666 /var/run/docker.sock
    ```
-5. Now, run the `deploy` command from the [Deployment](#deployment) section
+5. Configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
+   ```
+   export AWS_ACCESS_KEY_ID=<AWS Access Key ID>
+   export AWS_SECRET_ACCESS_KEY=<AWS Secret Access Key>
+   export AWS_SESSION_TOKEN=<AWS Session Token>
+   ```
+6. Now, run the `deploy` command from the [Deployment](#deployment) section
 
 #### Using local terminal instance
 
@@ -137,7 +149,13 @@ See the section below for instructions on how to obtain your Jira email, URL, an
    sudo systemctl start docker.service
    sudo chmod 666 /var/run/docker.sock
    ```
-3. Now, run the `deploy` command from the [Deployment](#deployment) section
+3. Configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
+   ```
+   export AWS_ACCESS_KEY_ID=<AWS Access Key ID>
+   export AWS_SECRET_ACCESS_KEY=<AWS Secret Access Key>
+   export AWS_SESSION_TOKEN=<AWS Session Token>
+   ```
+4. Now, run the `deploy` command from the [Deployment](#deployment) section
 
 ## Post Deployment
 

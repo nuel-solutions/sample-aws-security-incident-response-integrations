@@ -53,6 +53,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
 
 1. `AWS Access Key ID`
 2. `AWS Secret Access Key`
+3. `AWS Session Token`
 
 ### Install the necessary tools
 
@@ -74,7 +75,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    6. Click on `Launch Instance`
 3. Once the instance is up and running, select the instance and click on `Connect`. Then, connect using `EC2 Instance Connect`:
       ![EC2-instance-connect](../images/ec2-instance-connect.png)
-4. Once connected, simply copy and paste the following set of commands (provide the `AWS Access Key ID` and `AWS Secret Access Key` when prompted):
+4. Once connected, simply copy and paste the following set of commands:
    ```
    sudo yum install git -y
    sudo yum install docker
@@ -90,14 +91,19 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    chmod +x deploy-integrations-solution.py
    sudo systemctl start docker.service
    sudo chmod 666 /var/run/docker.sock
-   aws configure
    ```
-5. Now, run the `deploy` command from the [Deployment](#deployment) section
+5. Configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
+   ```
+   export AWS_ACCESS_KEY_ID=<AWS Access Key ID>
+   export AWS_SECRET_ACCESS_KEY=<AWS Secret Access Key>
+   export AWS_SESSION_TOKEN=<AWS Session Token>
+   ```
+6. Now, run the `deploy` command from the [Deployment](#deployment) section
 
 #### Using local terminal instance
 
 1. Open a new Terminal session
-2. Copy and paste the following set of commands (provide the `AWS Access Key ID` and `AWS Secret Access Key` when prompted):
+2. Copy and paste the following set of commands:
    ```
    sudo yum install git -y
    sudo yum install docker
@@ -113,9 +119,14 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    chmod +x deploy-integrations-solution.py
    sudo systemctl start docker.service
    sudo chmod 666 /var/run/docker.sock
-   aws configure
    ```
-3. Now, run the `deploy` command from the [Deployment](#deployment) section
+3. Configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
+   ```
+   export AWS_ACCESS_KEY_ID=<AWS Access Key ID>
+   export AWS_SECRET_ACCESS_KEY=<AWS Secret Access Key>
+   export AWS_SESSION_TOKEN=<AWS Session Token>
+   ```
+4. Now, run the `deploy` command from the [Deployment](#deployment) section
 
 ### Secure Your Credentials (Optional)
 
