@@ -2,15 +2,12 @@
 Placeholder for Slack domain model tests.
 
 The original test_slack_domain.py file has syntax errors and dependency issues.
-These tests are currently skipped in CI due to missing Slack SDK dependencies.
+These tests are currently skipped using @pytest.mark.skip decorators.
 
 TODO: Fix and implement proper Slack domain tests in future Slack implementation story.
 """
 
 import pytest
-
-# Mark this test as requiring Slack SDK dependencies (skipped in CI)
-pytestmark = pytest.mark.requires_slack_sdk
 
 
 @pytest.mark.skip(reason="Slack domain tests have syntax errors and need to be fixed")

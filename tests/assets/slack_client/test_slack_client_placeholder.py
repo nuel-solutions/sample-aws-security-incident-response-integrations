@@ -8,14 +8,12 @@ The original Slack client tests had import errors due to missing dependencies:
 - test_slack_client.py
 
 These tests require slack-bolt and slack-sdk dependencies that cause issues in CI.
+They are currently skipped using @pytest.mark.skip decorators.
 
 TODO: Implement proper Slack client tests in future Slack implementation story.
 """
 
 import pytest
-
-# Mark as requiring Slack SDK dependencies
-pytestmark = pytest.mark.requires_slack_sdk
 
 
 @pytest.mark.skip(reason="Slack client tests have dependency issues and need to be implemented")

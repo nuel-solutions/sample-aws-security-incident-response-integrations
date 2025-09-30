@@ -114,5 +114,5 @@ jobs:
 
       - name: Run pytest
         run: |
-          # Run all tests, skip those marked as requiring external dependencies
-          pytest tests/ -v -m "not requires_slack_sdk"
+          # Run all tests (tests that need to be skipped use @pytest.mark.skip)
+          pytest tests/ -v
