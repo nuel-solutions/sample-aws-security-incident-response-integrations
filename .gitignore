@@ -60,3 +60,5 @@ cdk.out/*
 slack-integration-learning-plan.md
 project-overview.md
 commit-msg.txt
+pr-checklist-template.md
+pyrightconfig.json
