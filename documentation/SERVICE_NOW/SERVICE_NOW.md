@@ -19,7 +19,7 @@ This document provides an overview of the AWS Security Incident Response Service
 - **`itsm`**: IT Service Management module - Uses standard ServiceNow incident table (`incident`)
 - **`ir`**: Incident Response module - Uses ServiceNow Security Incident Response table (`sn_si_incident`)
 
-See the Prerequisites section below for instructions on how to obtain your ServiceNow instance id, username and password, configure aws profile, and install necessary tools required to deploy the integration
+See the Prerequisites section below for instructions on how to obtain your ServiceNow instance id, username and password, configure aws profile, and install necessary tools required to deploy the integration.
 
 ## Prerequisites
 
@@ -85,7 +85,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    npm -v
    npx -v
    sudo yum install python3 python3-pip -y
-   git clone https://github.com/sample-aws-security-incident-response-integrations.git
+   git clone https://github.com/aws-samples/sample-aws-security-incident-response-integrations.git
    cd sample-aws-security-incident-response-integrations/
    pip install -r requirements.txt
    chmod +x deploy-integrations-solution.py
@@ -113,7 +113,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    npm -v
    npx -v
    sudo yum install python3 python3-pip -y
-   git clone https://github.com/sample-aws-security-incident-response-integrations.git
+   git clone https://github.com/aws-samples/sample-aws-security-incident-response-integrations.git
    cd sample-aws-security-incident-response-integrations/
    pip install -r requirements.txt
    chmod +x deploy-integrations-solution.py
