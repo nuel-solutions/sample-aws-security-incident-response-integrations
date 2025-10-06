@@ -6,7 +6,7 @@ This module provides a wrapper around the Slack Bolt framework for use in the Se
 import os
 import logging
 import time
-from typing import List, Dict, Optional, Any, Union, Callable
+from typing import List, Dict, Optional, Any, Union
 
 import boto3
 from slack_bolt import App
@@ -18,9 +18,8 @@ logger.setLevel(logging.INFO)
 
 # Initialize AWS clients
 try:
-    ssm_client: Optional[Any] = boto3.client("ssm")
+    ssm_client = boto3.client("ssm")
 except Exception:
-    # For testing environments without AWS credentials
     ssm_client = None
 
 # Import constants with fallbacks for different environments
@@ -48,34 +47,21 @@ except ImportError:
 
 
 class SlackBoltClient:
-    """Slack Bolt framework client for AWS Security Incident Response integration.
-    
-    This class provides a wrapper around the Slack Bolt framework to handle
-    Slack API operations for security incident management. It includes
-    authentication via SSM Parameter Store, retry logic with exponential
-    backoff, and comprehensive error handling.
-    
-    Attributes:
-        app (Optional[App]): Slack Bolt application instance
-        client (Optional[WebClient]): Slack Web API client
-        
-    Example:
-        >>> client = SlackBoltClient()
-        >>> channel_id = client.create_channel('12345', 'Security Incident')
-        >>> client.post_message(channel_id, 'Incident created')
-    """
+    """Class to handle Slack Bolt framework interactions"""
 
-    def __init__(self) -> None:
-        """Initialize the Slack Bolt client.
-        
-        Retrieves Slack credentials from SSM Parameter Store and creates
-        a Slack Bolt application instance with proper authentication.
-        
-        Raises:
-            Exception: If SSM Parameter Store access fails or credentials are invalid
-        """
+    def __init__(self):
+        """Initialize the Slack Bolt client."""
         self.app = self._create_app()
         self.client = self.app.client if self.app else None
+        self.lambda_context = None
+    
+    def set_lambda_context(self, context):
+        """Set the Lambda context for timeout-aware operations.
+        
+        Args:
+            context: AWS Lambda context object
+        """
+        self.lambda_context = context
 
     def _create_app(self) -> Optional[App]:
         """Create a Slack Bolt app instance.
@@ -96,14 +82,8 @@ class SlackBoltClient:
                 signing_secret=signing_secret,
                 process_before_response=True
             )
-        except ValueError as e:
-            logger.error(f"Invalid Slack credentials format: {str(e)}")
-            return None
-        except ImportError as e:
-            logger.error(f"Missing Slack Bolt dependencies: {str(e)}")
-            return None
         except Exception as e:
-            logger.error(f"Unexpected error creating Slack Bolt app: {str(e)}")
+            logger.error(f"Error creating Slack Bolt app: {str(e)}")
             return None
 
     def _get_bot_token(self) -> Optional[str]:
@@ -146,26 +126,7 @@ class SlackBoltClient:
             logger.error(f"Error retrieving Slack signing secret from SSM: {str(e)}")
             return None
 
-    def _handle_retry_delay(self, attempt: int, delay: int, error_msg: str) -> int:
-        """Handle retry delay logic.
-        
-        Args:
-            attempt: Current attempt number
-            delay: Current delay value
-            error_msg: Error message to log
-            
-        Returns:
-            Updated delay value
-        """
-        if attempt < SLACK_MAX_RETRIES - 1:
-            logger.warning(f"{error_msg} on attempt {attempt + 1}")
-            time.sleep(delay)
-            return min(delay * 2, SLACK_MAX_RETRY_DELAY)
-        else:
-            logger.error(f"{error_msg} after {SLACK_MAX_RETRIES} attempts")
-            raise
-
-    def _retry_with_backoff(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    def _retry_with_backoff(self, func, *args, **kwargs) -> Any:
         """Execute a function with exponential backoff retry logic.
 
         Args:
@@ -177,46 +138,64 @@ class SlackBoltClient:
             Function result or None if all retries fail
         """
         delay = SLACK_INITIAL_RETRY_DELAY
+        buffer_seconds = 30  # Buffer time before lambda timeout
         
         for attempt in range(SLACK_MAX_RETRIES):
             try:
                 return func(*args, **kwargs)
             except SlackApiError as e:
-                if e.response["error"] == "rate_limited":
-                    headers = e.response.get("headers", {})
-                    retry_after = int(headers.get("Retry-After", delay)) if hasattr(headers, 'get') else delay  # type: ignore
-                    logger.warning(f"Rate limited, retrying after {retry_after} seconds")
-                    time.sleep(retry_after)
+                if attempt < SLACK_MAX_RETRIES - 1:
+                    if e.response["error"] == "rate_limited":
+                        # Handle rate limiting - check both response headers and nested headers
+                        headers = e.response.get("headers", {})
+                        if hasattr(headers, 'get'):
+                            retry_after = int(headers.get("Retry-After", delay))
+                        else:
+                            retry_after = delay
+                        sleep_time = retry_after
+                        logger.warning(f"Rate limited, retrying after {retry_after} seconds")
+                    else:
+                        sleep_time = delay
+                        logger.warning(f"Slack API error on attempt {attempt + 1}: {e.response['error']}")
+                        delay = min(delay * 2, SLACK_MAX_RETRY_DELAY)
+                    
+                    # single timeout check for all sleep scenarios
+                    if (self.lambda_context and 
+                        hasattr(self.lambda_context, 'get_remaining_time_in_millis')):
+                        remaining_ms = self.lambda_context.get_remaining_time_in_millis()
+                        if remaining_ms < ((sleep_time + buffer_seconds) * 1000):
+                            logger.warning(f"Insufficient time for delay ({sleep_time}s), aborting")
+                            break
+                    
+                    time.sleep(sleep_time)
                 else:
-                    delay = self._handle_retry_delay(attempt, delay, f"Slack API error: {e.response['error']}")
+                    logger.error(f"Slack API error after {SLACK_MAX_RETRIES} attempts: {e.response['error']}")
+                    raise
+            except (ConnectionError, TimeoutError, OSError) as e:
+                # Only retry network-related transient failures
+                if attempt < SLACK_MAX_RETRIES - 1:
+                    logger.warning(f"Network error on attempt {attempt + 1}: {str(e)}")
+                    time.sleep(delay)
+                    delay = min(delay * 2, SLACK_MAX_RETRY_DELAY)
+                else:
+                    logger.error(f"Network error after {SLACK_MAX_RETRIES} attempts: {str(e)}")
+                    raise
             except Exception as e:
-                delay = self._handle_retry_delay(attempt, delay, f"Error: {str(e)}")
+                # Don't retry programming errors - fail fast
+                logger.error(f"Non-retryable error: {str(e)}")
+                raise
         
         return None
 
-    def create_channel(self, case_id: str, case_title: Optional[str] = None) -> Optional[str]:
+    def create_channel(self, case_id: str, case_title: str = None) -> Optional[str]:
         """Create a new Slack channel for an incident.
 
-        Creates a public Slack channel with the naming convention:
-        'aws-security-incident-response-case-{case_id}'
-        
         Args:
-            case_id (str): The AWS SIR case ID (e.g., '12345')
-            case_title (Optional[str]): The case title for channel topic.
-                If provided, sets channel topic to 'AWS Security Incident: {case_title}'
+            case_id (str): The AWS SIR case ID
+            case_title (str, optional): The case title for channel topic
 
         Returns:
-            Optional[str]: Slack channel ID if successful (e.g., 'C1234567890'), 
-                          None if creation fails
-                          
-        Example:
-            >>> client = SlackBoltClient()
-            >>> channel_id = client.create_channel('12345', 'Security Breach')
-            >>> print(channel_id)  # 'C1234567890'
-            
-        Raises:
-            SlackApiError: When Slack API returns an error
-            Exception: For other unexpected errors
+            Optional[str]: Channel ID if successful, None otherwise
         """
         if not self.client:
             logger.error("Slack client not initialized")
@@ -225,12 +204,12 @@ class SlackBoltClient:
         try:
             channel_name = f"{SLACK_CHANNEL_PREFIX}{case_id}"
             
-            def _create_channel() -> str:
-                response = self.client.conversations_create(  # type: ignore
+            def _create_channel():
+                response = self.client.conversations_create(
                     name=channel_name,
                     is_private=False
                 )
-                return response["channel"]["id"]  # type: ignore
+                return response["channel"]["id"]
 
             channel_id = self._retry_with_backoff(_create_channel)
             
@@ -249,37 +228,24 @@ class SlackBoltClient:
             logger.error(f"Error creating Slack channel for case {case_id}: {str(e)}")
             return None
 
-    def post_message(self, channel_id: str, text: str, blocks: Optional[List[Dict[str, Any]]] = None) -> bool:
+    def post_message(self, channel_id: str, text: str, blocks: Optional[List[Dict]] = None) -> bool:
         """Post a message to a Slack channel.
 
         Args:
-            channel_id (str): The Slack channel ID (e.g., 'C1234567890')
-            text (str): Message text content
-            blocks (Optional[List[Dict[str, Any]]]): Slack Block Kit elements for rich formatting.
-                See https://api.slack.com/block-kit for format details
+            channel_id (str): The Slack channel ID
+            text (str): Message text
+            blocks (Optional[List[Dict]]): Optional Slack blocks for rich formatting
 
         Returns:
-            bool: True if message posted successfully, False otherwise
-            
-        Example:
-            >>> client = SlackBoltClient()
-            >>> success = client.post_message(
-            ...     'C1234567890', 
-            ...     'New security incident created',
-            ...     blocks=[{
-            ...         'type': 'section',
-            ...         'text': {'type': 'mrkdwn', 'text': '*Case ID:* 12345'}
-            ...     }]
-            ... )
-            >>> print(success)  # True
+            bool: True if successful, False otherwise
         """
         if not self.client:
             logger.error("Slack client not initialized")
             return False
 
         try:
-            def _post_message() -> Any:
-                return self.client.chat_postMessage(  # type: ignore
+            def _post_message():
+                return self.client.chat_postMessage(
                     channel=channel_id,
                     text=text,
                     blocks=blocks
@@ -306,8 +272,8 @@ class SlackBoltClient:
             return False
 
         try:
-            def _invite_users() -> Any:
-                return self.client.conversations_invite(  # type: ignore
+            def _invite_users():
+                return self.client.conversations_invite(
                     channel=channel_id,
                     users=",".join(user_ids)
                 )
@@ -333,9 +299,9 @@ class SlackBoltClient:
             return None
 
         try:
-            def _get_channel_info() -> Any:
-                response = self.client.conversations_info(channel=channel_id)  # type: ignore
-                return response["channel"]  # type: ignore
+            def _get_channel_info():
+                response = self.client.conversations_info(channel=channel_id)
+                return response["channel"]
 
             return self._retry_with_backoff(_get_channel_info)
             
@@ -344,39 +310,26 @@ class SlackBoltClient:
             return None
 
     def upload_file(self, channel_id: str, file_content: bytes, filename: str, 
-                   title: Optional[str] = None, initial_comment: Optional[str] = None) -> bool:
+                   title: str = None, initial_comment: str = None) -> bool:
         """Upload a file to a Slack channel.
 
         Args:
-            channel_id (str): The Slack channel ID (e.g., 'C1234567890')
+            channel_id (str): The Slack channel ID
             file_content (bytes): File content as bytes
-            filename (str): Name of the file (e.g., 'evidence.pdf')
-            title (Optional[str]): File title displayed in Slack. Defaults to filename
-            initial_comment (Optional[str]): Comment to accompany the file upload
+            filename (str): Name of the file
+            title (str, optional): File title
+            initial_comment (str, optional): Initial comment for the file
 
         Returns:
-            bool: True if file uploaded successfully, False otherwise
-            
-        Example:
-            >>> client = SlackBoltClient()
-            >>> with open('evidence.pdf', 'rb') as f:
-            ...     content = f.read()
-            >>> success = client.upload_file(
-            ...     'C1234567890',
-            ...     content,
-            ...     'evidence.pdf',
-            ...     title='Security Evidence',
-            ...     initial_comment='Evidence from incident investigation'
-            ... )
-            >>> print(success)  # True
+            bool: True if successful, False otherwise
         """
         if not self.client:
             logger.error("Slack client not initialized")
             return False
 
         try:
-            def _upload_file() -> Any:
-                return self.client.files_upload_v2(  # type: ignore
+            def _upload_file():
+                return self.client.files_upload_v2(
                     channel=channel_id,
                     file=file_content,
                     filename=filename,
@@ -405,10 +358,10 @@ class SlackBoltClient:
             return False
 
         try:
-            def _kick_users() -> Dict[str, bool]:
+            def _kick_users():
                 # Slack API requires individual kick operations
                 for user_id in user_ids:
-                    self.client.conversations_kick(  # type: ignore
+                    self.client.conversations_kick(
                         channel=channel_id,
                         user=user_id
                     )
@@ -436,8 +389,8 @@ class SlackBoltClient:
             return False
 
         try:
-            def _set_topic() -> Any:
-                return self.client.conversations_setTopic(  # type: ignore
+            def _set_topic():
+                return self.client.conversations_setTopic(
                     channel=channel_id,
                     topic=topic
                 )
@@ -463,9 +416,9 @@ class SlackBoltClient:
             return None
 
         try:
-            def _get_members() -> List[str]:
-                response = self.client.conversations_members(channel=channel_id)  # type: ignore
-                return response["members"]  # type: ignore
+            def _get_members():
+                response = self.client.conversations_members(channel=channel_id)
+                return response["members"]
 
             return self._retry_with_backoff(_get_members)
             
@@ -487,8 +440,8 @@ class SlackBoltClient:
             return False
 
         try:
-            def _archive_channel() -> Any:
-                return self.client.conversations_archive(channel=channel_id)  # type: ignore
+            def _archive_channel():
+                return self.client.conversations_archive(channel=channel_id)
 
             result = self._retry_with_backoff(_archive_channel)
             return result is not None
@@ -501,29 +454,19 @@ class SlackBoltClient:
         """Get information about a Slack user.
 
         Args:
-            user_id (str): The Slack user ID (e.g., 'U1234567890')
+            user_id (str): The Slack user ID
 
         Returns:
-            Optional[Dict[str, Any]]: User information dictionary containing:
-                - id: User ID
-                - name: Username
-                - real_name: Display name
-                - email: User email (if available)
-                Returns None if retrieval fails
-                
-        Example:
-            >>> client = SlackBoltClient()
-            >>> user_info = client.get_user_info('U1234567890')
-            >>> print(user_info['real_name'])  # 'John Doe'
+            Optional[Dict[str, Any]]: User information or None if retrieval fails
         """
         if not self.client:
             logger.error("Slack client not initialized")
             return None
 
         try:
-            def _get_user_info() -> Dict[str, Any]:
-                response = self.client.users_info(user=user_id)  # type: ignore
-                return response["user"]  # type: ignore
+            def _get_user_info():
+                response = self.client.users_info(user=user_id)
+                return response["user"]
 
             return self._retry_with_backoff(_get_user_info)
             
@@ -531,7 +474,7 @@ class SlackBoltClient:
             logger.error(f"Error getting user info for {user_id}: {str(e)}")
             return None
 
-    def get_channel_messages(self, channel_id: str, oldest: Optional[str] = None, latest: Optional[str] = None, 
+    def get_channel_messages(self, channel_id: str, oldest: str = None, latest: str = None, 
                            limit: int = 100) -> Optional[List[Dict[str, Any]]]:
         """Get messages from a Slack channel.
 
@@ -549,14 +492,14 @@ class SlackBoltClient:
             return None
 
         try:
-            def _get_messages() -> List[Dict[str, Any]]:
-                response = self.client.conversations_history(  # type: ignore
+            def _get_messages():
+                response = self.client.conversations_history(
                     channel=channel_id,
                     oldest=oldest,
                     latest=latest,
                     limit=limit
                 )
-                return response["messages"]  # type: ignore
+                return response["messages"]
 
             return self._retry_with_backoff(_get_messages)
             
