@@ -6,6 +6,9 @@ env:
 on:
   pull_request:
     branches: [ main ]
+  push:
+    branches: [ v4/slack-integration ]  # Test in your fork
+  workflow_dispatch:  # Manual trigger
 
 jobs:
   security-scan:
