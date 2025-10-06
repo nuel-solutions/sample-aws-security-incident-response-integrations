@@ -960,7 +960,7 @@ class ResponseBuilderService:
 
 
 # @logger.inject_lambda_context
-def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
+def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
     """
     Lambda handler for processing API Gateway webhook events from ServiceNow
 
@@ -1075,15 +1075,3 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
         return ResponseBuilderService._build_error_response(
             f"Internal server error: {str(e)}"
         )
-
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """AWS Lambda handler function.
-    
-    Args:
-        event (Dict[str, Any]): Lambda event object
-        context (Any): Lambda context object
-        
-    Returns:
-        Dict[str, Any]: Dictionary containing response status and details
-    """
-    return handler(event, context)
