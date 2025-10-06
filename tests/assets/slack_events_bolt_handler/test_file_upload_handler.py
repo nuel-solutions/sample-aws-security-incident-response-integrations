@@ -14,6 +14,8 @@ with patch('boto3.client'), patch('boto3.resource'):
     import os
     sys.path.append(os.path.join(os.path.dirname(__file__), '../../../assets/slack_events_bolt_handler'))
 
+    # Import from the correct slack_events_bolt_handler index.py
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../assets/slack_events_bolt_handler'))
     from index import (
         download_slack_file,
         MAX_FILE_SIZE_BYTES,
