@@ -38,12 +38,6 @@ jobs:
       - name: Run detect-secrets
         run: detect-secrets scan --baseline .secrets.baseline
 
-      - name: Install Syft & Grype
-        uses: anchore/sbom-action@v0
-        with:
-          syft-version: latest
-          grype-version: latest
-
       - name: Run Syft (SBOM Generator)
         uses: anchore/sbom-action@v0
         with:
