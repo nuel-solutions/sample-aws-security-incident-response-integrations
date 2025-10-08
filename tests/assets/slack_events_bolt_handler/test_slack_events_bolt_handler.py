@@ -6,6 +6,7 @@ import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
+
 # Import the module under test
 import sys
 import os
@@ -175,9 +176,13 @@ class TestSlackEventsBoltHandler:
         with patch("index.get_ssm_parameter") as mock_get_param:
             mock_get_param.side_effect = ["xoxb-test-token", "test-signing-secret"]
             
+            # Test that the function attempts to create an app when credentials are available
+            # The actual App creation is mocked at module level, so we just verify the logic
             result = index.create_slack_app()
             
+            # Verify that get_ssm_parameter was called for both token and secret
             assert mock_get_param.call_count == 2
+            # The result might be None due to mocking, but the important thing is no exception was raised
 
     def test_create_slack_app_missing_credentials(self, mock_aws_services):
         """Test Slack app creation with missing credentials"""
