@@ -2,8 +2,6 @@
 Unit tests for Slack Events Bolt Handler file upload functionality.
 """
 
-# TODO: Fix mock configuration issues with retry logic and request handling to re-enable skipped tests
-
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import json
@@ -11,15 +9,16 @@ import requests
 
 # Mock AWS clients before importing the handler
 with patch('boto3.client'), patch('boto3.resource'):
+    # Import the handler
     import sys
     import os
     
-    # Add project root to Python path
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
+    # Add the slack_events_bolt_handler directory to path
+    slack_handler_path = os.path.join(os.path.dirname(__file__), '../../../assets/slack_events_bolt_handler')
+    sys.path.insert(0, slack_handler_path)
     
-    from assets.slack_events_bolt_handler.index import (
+    # Import from the slack_events_bolt_handler index.py
+    from index import (
         download_slack_file,
         MAX_FILE_SIZE_BYTES,
         SLACK_MAX_RETRIES,
@@ -100,7 +99,6 @@ class TestDownloadSlackFile:
         
         assert result is None
 
-    @pytest.mark.skip(reason="Mock configuration issue with retry logic")
     @patch('assets.slack_events_bolt_handler.index.requests.head')
     @patch('assets.slack_events_bolt_handler.index.requests.get')
     @patch('assets.slack_events_bolt_handler.index.time.sleep')
@@ -131,7 +129,6 @@ class TestDownloadSlackFile:
         assert mock_get.call_count == 2
         mock_sleep.assert_called_once_with(SLACK_INITIAL_RETRY_DELAY)
 
-    @pytest.mark.skip(reason="Mock configuration issue with retry logic")
     @patch('assets.slack_events_bolt_handler.index.requests.head')
     @patch('assets.slack_events_bolt_handler.index.requests.get')
     @patch('assets.slack_events_bolt_handler.index.time.sleep')
@@ -157,7 +154,6 @@ class TestDownloadSlackFile:
         assert mock_get.call_count == SLACK_MAX_RETRIES
         assert mock_sleep.call_count == SLACK_MAX_RETRIES - 1
 
-    @pytest.mark.skip(reason="Mock configuration issue with HEAD request")
     @patch('assets.slack_events_bolt_handler.index.requests.head')
     def test_download_head_request_failure(self, mock_head):
         """Test file download failure when HEAD request fails"""
@@ -170,8 +166,8 @@ class TestDownloadSlackFile:
         
         assert result is None
 
-    @patch('tests.assets.slack_events_bolt_handler.test_file_upload_handler.requests.head')
-    @patch('tests.assets.slack_events_bolt_handler.test_file_upload_handler.requests.get')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.get')
     def test_download_with_custom_max_size(self, mock_get, mock_head):
         """Test file download with custom max size"""
         custom_max_size = 500
@@ -191,9 +187,8 @@ class TestDownloadSlackFile:
         assert result is None
         mock_get.assert_not_called()
 
-    @pytest.mark.skip(reason="Mock configuration issue with unexpected error handling")
-    @patch('tests.assets.slack_events_bolt_handler.test_file_upload_handler.requests.head')
-    @patch('tests.assets.slack_events_bolt_handler.test_file_upload_handler.requests.get')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.get')
     def test_download_unexpected_error(self, mock_get, mock_head):
         """Test file download with unexpected error"""
         # Mock HEAD response
@@ -307,7 +302,7 @@ class TestFileUploadHandler:
         mock_logger = Mock()
         
         # Import and test the handler
-        from assets.slack_events_bolt_handler.index import app
+        from index import app
         if app:
             # Get the file upload handler
             handlers = [h for h in app._listeners if h.matcher.func.__name__ == 'handle_file_upload']
@@ -335,7 +330,7 @@ class TestFileUploadHandler:
         
         mock_logger = Mock()
         
-        from assets.slack_events_bolt_handler.index import app
+        from index import app
         if app:
             handlers = [h for h in app._listeners if h.matcher.func.__name__ == 'handle_file_upload']
             if handlers:
@@ -365,7 +360,7 @@ class TestFileUploadHandler:
         
         mock_logger = Mock()
         
-        from assets.slack_events_bolt_handler.index import app
+        from index import app
         if app:
             handlers = [h for h in app._listeners if h.matcher.func.__name__ == 'handle_file_upload']
             if handlers:
@@ -390,7 +385,7 @@ class TestFileUploadHandler:
         
         mock_logger = Mock()
         
-        from assets.slack_events_bolt_handler.index import app
+        from index import app
         if app:
             handlers = [h for h in app._listeners if h.matcher.func.__name__ == 'handle_file_upload']
             if handlers:
@@ -415,7 +410,7 @@ class TestFileUploadHandler:
         
         mock_logger = Mock()
         
-        from assets.slack_events_bolt_handler.index import app
+        from index import app
         if app:
             handlers = [h for h in app._listeners if h.matcher.func.__name__ == 'handle_file_upload']
             if handlers:
@@ -444,7 +439,7 @@ class TestFileUploadHandler:
         
         mock_logger = Mock()
         
-        from assets.slack_events_bolt_handler.index import app
+        from index import app
         if app:
             handlers = [h for h in app._listeners if h.matcher.func.__name__ == 'handle_file_upload']
             if handlers:
@@ -477,7 +472,7 @@ class TestFileUploadHandler:
         
         mock_logger = Mock()
         
-        from assets.slack_events_bolt_handler.index import app
+        from index import app
         if app:
             handlers = [h for h in app._listeners if h.matcher.func.__name__ == 'handle_file_upload']
             if handlers:
@@ -508,7 +503,7 @@ class TestFileUploadHandler:
         
         mock_logger = Mock()
         
-        from assets.slack_events_bolt_handler.index import app
+        from index import app
         if app:
             handlers = [h for h in app._listeners if h.matcher.func.__name__ == 'handle_file_upload']
             if handlers:
