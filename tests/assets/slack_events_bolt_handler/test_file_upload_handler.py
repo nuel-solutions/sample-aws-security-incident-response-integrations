@@ -12,10 +12,12 @@ with patch('boto3.client'), patch('boto3.resource'):
     # Import the handler
     import sys
     import os
-    sys.path.append(os.path.join(os.path.dirname(__file__), '../../../assets/slack_events_bolt_handler'))
-
-    # Import from the correct slack_events_bolt_handler index.py
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../assets/slack_events_bolt_handler'))
+    
+    # Add the slack_events_bolt_handler directory to path
+    slack_handler_path = os.path.join(os.path.dirname(__file__), '../../../assets/slack_events_bolt_handler')
+    sys.path.insert(0, slack_handler_path)
+    
+    # Import from the slack_events_bolt_handler index.py
     from index import (
         download_slack_file,
         MAX_FILE_SIZE_BYTES,
@@ -28,9 +30,9 @@ with patch('boto3.client'), patch('boto3.resource'):
 class TestDownloadSlackFile:
     """Test cases for download_slack_file function"""
 
-    @patch('index.requests.head')
-    @patch('index.requests.get')
-    @patch('index.time.sleep')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.get')
+    @patch('assets.slack_events_bolt_handler.index.time.sleep')
     def test_download_success(self, mock_sleep, mock_get, mock_head):
         """Test successful file download"""
         # Mock HEAD response
@@ -55,7 +57,7 @@ class TestDownloadSlackFile:
         mock_get.assert_called_once()
         mock_sleep.assert_not_called()
 
-    @patch('index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
     def test_download_file_too_large_head_check(self, mock_head):
         """Test file download rejection when file is too large (detected in HEAD request)"""
         # Mock HEAD response with large file size
@@ -72,8 +74,8 @@ class TestDownloadSlackFile:
         assert result is None
         mock_head.assert_called_once()
 
-    @patch('index.requests.head')
-    @patch('index.requests.get')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.get')
     def test_download_file_too_large_during_download(self, mock_get, mock_head):
         """Test file download rejection when file exceeds size during download"""
         # Mock HEAD response without content-length
@@ -97,9 +99,9 @@ class TestDownloadSlackFile:
         
         assert result is None
 
-    @patch('index.requests.head')
-    @patch('index.requests.get')
-    @patch('index.time.sleep')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.get')
+    @patch('assets.slack_events_bolt_handler.index.time.sleep')
     def test_download_with_retry_success(self, mock_sleep, mock_get, mock_head):
         """Test file download with retry on failure then success"""
         # Mock HEAD response
@@ -127,9 +129,9 @@ class TestDownloadSlackFile:
         assert mock_get.call_count == 2
         mock_sleep.assert_called_once_with(SLACK_INITIAL_RETRY_DELAY)
 
-    @patch('index.requests.head')
-    @patch('index.requests.get')
-    @patch('index.time.sleep')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.get')
+    @patch('assets.slack_events_bolt_handler.index.time.sleep')
     def test_download_max_retries_exceeded(self, mock_sleep, mock_get, mock_head):
         """Test file download failure after max retries"""
         # Mock HEAD response
@@ -152,7 +154,7 @@ class TestDownloadSlackFile:
         assert mock_get.call_count == SLACK_MAX_RETRIES
         assert mock_sleep.call_count == SLACK_MAX_RETRIES - 1
 
-    @patch('index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
     def test_download_head_request_failure(self, mock_head):
         """Test file download failure when HEAD request fails"""
         mock_head.side_effect = requests.exceptions.RequestException("HEAD request failed")
@@ -164,8 +166,8 @@ class TestDownloadSlackFile:
         
         assert result is None
 
-    @patch('index.requests.head')
-    @patch('index.requests.get')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.get')
     def test_download_with_custom_max_size(self, mock_get, mock_head):
         """Test file download with custom max size"""
         custom_max_size = 500
@@ -185,8 +187,8 @@ class TestDownloadSlackFile:
         assert result is None
         mock_get.assert_not_called()
 
-    @patch('index.requests.head')
-    @patch('index.requests.get')
+    @patch('assets.slack_events_bolt_handler.index.requests.head')
+    @patch('assets.slack_events_bolt_handler.index.requests.get')
     def test_download_unexpected_error(self, mock_get, mock_head):
         """Test file download with unexpected error"""
         # Mock HEAD response
@@ -207,8 +209,8 @@ class TestDownloadSlackFile:
 
     def test_download_with_proper_headers(self):
         """Test that download uses proper headers"""
-        with patch('index.requests.head') as mock_head, \
-             patch('index.requests.get') as mock_get:
+        with patch('assets.slack_events_bolt_handler.index.requests.head') as mock_head, \
+             patch('assets.slack_events_bolt_handler.index.requests.get') as mock_get:
             
             # Mock HEAD response
             mock_head_response = Mock()
@@ -277,11 +279,11 @@ class TestFileUploadHandler:
             "id": "U1234567890",
             "real_name": "Test User"
         }
-
-    @patch('index.get_case_id_from_channel')
-    @patch('index.get_ssm_parameter')
-    @patch('index.download_slack_file')
-    @patch('index.publish_event_to_eventbridge')
+    
+    @patch('assets.slack_events_bolt_handler.index.download_slack_file')
+    @patch('assets.slack_events_bolt_handler.index.get_case_id_from_channel')
+    @patch('assets.slack_events_bolt_handler.index.get_ssm_parameter')
+    @patch('assets.slack_events_bolt_handler.index.publish_event_to_eventbridge')
     def test_file_upload_success(self, mock_publish, mock_download, mock_ssm, mock_get_case):
         """Test successful file upload handling"""
         # Setup mocks
@@ -316,8 +318,8 @@ class TestFileUploadHandler:
                 mock_download.assert_called_once()
                 mock_publish.assert_called_once()
 
-    @patch('index.get_case_id_from_channel')
-    @patch('index.publish_event_to_eventbridge')
+    @patch('assets.slack_events_bolt_handler.index.get_case_id_from_channel')
+    @patch('assets.slack_events_bolt_handler.index.publish_event_to_eventbridge')
     def test_file_upload_non_incident_channel(self, mock_publish, mock_get_case):
         """Test file upload in non-incident channel is ignored"""
         # Mock Slack client with non-incident channel
@@ -340,8 +342,8 @@ class TestFileUploadHandler:
                 mock_get_case.assert_not_called()
                 mock_publish.assert_not_called()
 
-    @patch('index.get_case_id_from_channel')
-    @patch('index.publish_event_to_eventbridge')
+    @patch('assets.slack_events_bolt_handler.index.get_case_id_from_channel')
+    @patch('assets.slack_events_bolt_handler.index.publish_event_to_eventbridge')
     def test_file_upload_file_too_large(self, mock_publish, mock_get_case):
         """Test file upload rejection when file is too large"""
         # Setup mocks
@@ -371,8 +373,8 @@ class TestFileUploadHandler:
                 assert call_args[0][0] == "File Upload Error"
                 assert "file_size_exceeded" in call_args[0][1]["errorType"]
 
-    @patch('index.get_case_id_from_channel')
-    @patch('index.publish_event_to_eventbridge')
+    @patch('assets.slack_events_bolt_handler.index.get_case_id_from_channel')
+    @patch('assets.slack_events_bolt_handler.index.publish_event_to_eventbridge')
     def test_file_upload_no_case_id(self, mock_publish, mock_get_case):
         """Test file upload when case ID cannot be found"""
         # Setup mocks
@@ -394,8 +396,8 @@ class TestFileUploadHandler:
                 mock_client.files_info.assert_not_called()
                 mock_publish.assert_not_called()
 
-    @patch('index.get_case_id_from_channel')
-    @patch('index.publish_event_to_eventbridge')
+    @patch('assets.slack_events_bolt_handler.index.get_case_id_from_channel')
+    @patch('assets.slack_events_bolt_handler.index.publish_event_to_eventbridge')
     def test_file_upload_file_info_error(self, mock_publish, mock_get_case):
         """Test file upload when file info retrieval fails"""
         # Setup mocks
@@ -421,9 +423,9 @@ class TestFileUploadHandler:
                 assert call_args[0][0] == "File Upload Error"
                 assert "file_info_retrieval_failed" in call_args[0][1]["errorType"]
 
-    @patch('index.get_case_id_from_channel')
-    @patch('index.get_ssm_parameter')
-    @patch('index.publish_event_to_eventbridge')
+    @patch('assets.slack_events_bolt_handler.index.get_case_id_from_channel')
+    @patch('assets.slack_events_bolt_handler.index.get_ssm_parameter')
+    @patch('assets.slack_events_bolt_handler.index.publish_event_to_eventbridge')
     def test_file_upload_no_bot_token(self, mock_publish, mock_ssm, mock_get_case):
         """Test file upload when bot token cannot be retrieved"""
         # Setup mocks
@@ -450,9 +452,9 @@ class TestFileUploadHandler:
                 assert call_args[0][0] == "File Upload Error"
                 assert "authentication_failed" in call_args[0][1]["errorType"]
 
-    @patch('index.get_case_id_from_channel')
-    @patch('index.get_ssm_parameter')
-    @patch('index.publish_event_to_eventbridge')
+    @patch('assets.slack_events_bolt_handler.index.get_case_id_from_channel')
+    @patch('assets.slack_events_bolt_handler.index.get_ssm_parameter')
+    @patch('assets.slack_events_bolt_handler.index.publish_event_to_eventbridge')
     def test_file_upload_no_download_url(self, mock_publish, mock_ssm, mock_get_case):
         """Test file upload when download URL is missing"""
         # Setup mocks
@@ -483,10 +485,10 @@ class TestFileUploadHandler:
                 assert call_args[0][0] == "File Upload Error"
                 assert "download_url_missing" in call_args[0][1]["errorType"]
 
-    @patch('index.get_case_id_from_channel')
-    @patch('index.get_ssm_parameter')
-    @patch('index.download_slack_file')
-    @patch('index.publish_event_to_eventbridge')
+    @patch('assets.slack_events_bolt_handler.index.get_case_id_from_channel')
+    @patch('assets.slack_events_bolt_handler.index.get_ssm_parameter')
+    @patch('assets.slack_events_bolt_handler.index.download_slack_file')
+    @patch('assets.slack_events_bolt_handler.index.publish_event_to_eventbridge')
     def test_file_upload_download_failure(self, mock_publish, mock_download, mock_ssm, mock_get_case):
         """Test file upload when file download fails"""
         # Setup mocks
