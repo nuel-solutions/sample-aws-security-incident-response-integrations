@@ -5,7 +5,8 @@ Unit tests for Slack Events Bolt Handler Lambda function.
 import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-
+from moto import mock_aws
+import boto3
 
 # Import the module under test
 import sys
@@ -45,33 +46,51 @@ class TestSlackEventsBoltHandler:
     @pytest.fixture
     def mock_aws_services(self):
         """Set up mock AWS services"""
-        # Mock DynamoDB table
-        mock_table = MagicMock()
-        mock_table.scan.return_value = {
-            "Items": [{
-                "PK": "Case#12345",
-                "SK": "latest",
-                "slackChannelId": "C1234567890"
-            }]
-        }
-        mock_table.get_item.return_value = {
-            "Item": {
-                "PK": "Case#12345",
-                "SK": "latest",
-                "slackChannelId": "C1234567890"
+        with mock_aws():
+            # Create mock DynamoDB table
+            dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
+            table = dynamodb.create_table(
+                TableName="test-incidents-table",
+                KeySchema=[
+                    {"AttributeName": "PK", "KeyType": "HASH"},
+                    {"AttributeName": "SK", "KeyType": "RANGE"}
+                ],
+                AttributeDefinitions=[
+                    {"AttributeName": "PK", "AttributeType": "S"},
+                    {"AttributeName": "SK", "AttributeType": "S"}
+                ],
+                BillingMode="PAY_PER_REQUEST"
+            )
+            
+            # Create mock SSM parameters
+            ssm = boto3.client("ssm", region_name="us-east-1")
+            ssm.put_parameter(
+                Name="/test/slackBotToken",
+                Value="xoxb-test-token",
+                Type="SecureString"
+            )
+            ssm.put_parameter(
+                Name="/test/slackSigningSecret",
+                Value="test-signing-secret",
+                Type="SecureString"
+            )
+            
+            # Add test data to DynamoDB
+            table.put_item(
+                Item={
+                    "PK": "Case#12345",
+                    "SK": "latest",
+                    "slackChannelId": "C1234567890",
+                    "caseId": "12345",
+                    "status": "Open"
+                }
+            )
+            
+            yield {
+                "dynamodb": dynamodb,
+                "table": table,
+                "ssm": ssm
             }
-        }
-        
-        # Mock SSM client
-        mock_ssm = MagicMock()
-        mock_ssm.get_parameter.return_value = {
-            "Parameter": {"Value": "xoxb-test-token"}
-        }
-        
-        return {
-            "table": mock_table,
-            "ssm": mock_ssm
-        }
 
     def test_get_ssm_parameter_success(self, mock_aws_services):
         """Test successful SSM parameter retrieval"""
@@ -81,9 +100,7 @@ class TestSlackEventsBoltHandler:
 
     def test_get_ssm_parameter_not_found(self, mock_aws_services):
         """Test SSM parameter not found"""
-        mock_ssm_error = MagicMock()
-        mock_ssm_error.get_parameter.side_effect = Exception("Parameter not found")
-        with patch.object(index, "ssm_client", mock_ssm_error):
+        with patch.object(index, "ssm_client", mock_aws_services["ssm"]):
             result = index.get_ssm_parameter("/nonexistent/parameter")
             assert result is None
 
@@ -95,9 +112,7 @@ class TestSlackEventsBoltHandler:
 
     def test_get_case_id_from_channel_not_found(self, mock_aws_services):
         """Test case ID not found for channel"""
-        mock_table_empty = MagicMock()
-        mock_table_empty.scan.return_value = {"Items": []}
-        with patch.object(index, "incidents_table", mock_table_empty):
+        with patch.object(index, "incidents_table", mock_aws_services["table"]):
             result = index.get_case_id_from_channel("C9999999999")
             assert result is None
 
@@ -109,9 +124,7 @@ class TestSlackEventsBoltHandler:
 
     def test_get_channel_id_from_case_not_found(self, mock_aws_services):
         """Test channel ID not found for case"""
-        mock_table_empty = MagicMock()
-        mock_table_empty.get_item.return_value = {}
-        with patch.object(index, "incidents_table", mock_table_empty):
+        with patch.object(index, "incidents_table", mock_aws_services["table"]):
             result = index.get_channel_id_from_case("99999")
             assert result is None
 
