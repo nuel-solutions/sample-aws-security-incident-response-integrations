@@ -110,3 +110,24 @@ jobs:
 
       - name: Run pytest
         run: pytest tests/ -v
+
+      #  -----------------
+      #   DEBUG STEP
+      # -----------------
+      - name: Debug Python environment
+        run: |
+          echo "PYTHONPATH: $PYTHONPATH"
+          echo "Current directory: $(pwd)"
+          python -c "import sys; import os; print('sys.path:', sys.path); print('Project root exists?', os.path.exists(os.getcwd()));"
+          python -c "try: import requests; print('Requests imported from:', requests.__file__); except ImportError as e: print('Requests import failed:', e);"
+
+      # -----------------
+      #   FIX IMPORT PATH
+      # -----------------
+      # OPTION 1: Set PYTHONPATH for testing
+      - name: Set PYTHONPATH and run pytest
+        if: always() # Run this step even if the previous fails for debugging
+        run: |
+          export PYTHONPATH="${{ github.workspace }}:$PYTHONPATH"
+          pytest tests/ -v
+  
