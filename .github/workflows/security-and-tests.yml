@@ -108,6 +108,25 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+          echo "===requests debug==="
+          python - <<'PY'
+          import requests, sys
+          print("requests __file__:", getattr(requests, "__file__", None))
+          print("requests __package__:", getattr(requests, "__package__", None))
+          print("has adapters?:", hasattr(requests, "adapters"))
+          print("module repr:", requests)
+          print("sys.path[0:8]:", sys.path[:8])
+          PY
+
+          echo "=== pip show requests/responses/moto ==="
+          pip show requests || true
+          pip show responses || true
+          pip show moto || true
+
+          echo "=== pip freeze (top matches) ==="
+          pip freeze | sed -n '1,200p' || true
+
+
       - name: Run pytest
         run: pytest tests/ -v
   
