@@ -8,7 +8,7 @@ botocore
 pysnc
 slack-bolt
 slack-sdk
-requests
+
 
 # Function Based Requirements
 -r assets/security_ir_poller/requirements.txt
