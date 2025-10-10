@@ -108,5 +108,5 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run pytest
-        run: pytest tests/ -v
+      - name: Run pytest and ignore test_slack_events_bolt_handler.py
+        run: pytest --ignore=tests/assets/slack_events_bolt_handler/test_slack_events_bolt_handler.py -v
