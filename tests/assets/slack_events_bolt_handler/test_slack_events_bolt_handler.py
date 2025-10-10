@@ -1,3 +1,5 @@
+#todo, this test is skipped due to github ci failure: Import error. Passes locally, but fails on github
+# it is currently skipped in the github ci workflow file
 """
 Unit tests for Slack Events Bolt Handler Lambda function.
 """
