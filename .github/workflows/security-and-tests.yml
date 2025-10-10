@@ -109,4 +109,6 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run pytest and ignore test_slack_events_bolt_handler.py
-        run: pytest --ignore=tests/assets/slack_events_bolt_handler/test_slack_events_bolt_handler.py -v
+      - run: |
+          # Run all tests (tests that need to be skipped use @pytest.mark.skip)
+          pytest tests/ -v
