@@ -9,7 +9,6 @@ pysnc
 slack-bolt
 slack-sdk
 
-
 # Function Based Requirements
 -r assets/security_ir_poller/requirements.txt
 -r assets/jira_client/requirements.txt

@@ -7,7 +7,7 @@ black
 isort
 mypy
 types-boto3
-requests
+types-requests
 moto
 bandit
 semgrep
