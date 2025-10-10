@@ -512,7 +512,7 @@ def store_incidents_in_dynamodb(
         return False
 
 
-def handler(event: Dict, context: Any) -> Dict:
+def lambda_handler(event: Dict, context: Any) -> Dict:
     """
     Lambda handler to process security incidents.
 
@@ -561,16 +561,3 @@ def handler(event: Dict, context: Any) -> Dict:
             "count": len(incidents),
         },
     }
-
-
-def lambda_handler(event: Dict, context: Any) -> Dict:
-    """AWS Lambda handler function.
-    
-    Args:
-        event (Dict): Lambda event object
-        context (Any): Lambda context object
-        
-    Returns:
-        Dict: Dictionary containing response status and details
-    """
-    return handler(event, context)
