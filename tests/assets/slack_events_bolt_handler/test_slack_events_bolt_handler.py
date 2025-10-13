@@ -5,7 +5,13 @@ Unit tests for Slack Events Bolt Handler Lambda function.
 import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from moto import mock_aws
+
+# Skip entire file if moto import fails (CI environment issue)
+try:
+    from moto import mock_aws
+except ImportError:
+    pytest.skip("Skipping slack_events_bolt_handler tests due to import conflicts in CI", allow_module_level=True)
+
 import boto3
 
 # Import the module under test
@@ -40,7 +46,6 @@ with patch("slack_bolt.App") as mock_app_class, \
     import index
 
 
-@pytest.mark.skip("This whole test fails on github ci due to import error, but passes locally")
 class TestSlackEventsBoltHandler:
     """Test class for Slack Events Bolt Handler"""
 
