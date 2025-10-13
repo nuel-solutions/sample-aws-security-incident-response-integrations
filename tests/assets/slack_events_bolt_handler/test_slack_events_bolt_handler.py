@@ -8,8 +8,6 @@ from unittest.mock import Mock, patch, MagicMock
 from moto import mock_aws
 import boto3
 
-pytestmark = pytest.mark.skip("This whole test fails on github ci due to import error, but passes locally")
-
 # Import the module under test
 import sys
 import os
@@ -42,6 +40,7 @@ with patch("slack_bolt.App") as mock_app_class, \
     import index
 
 
+@pytest.mark.skip("This whole test fails on github ci due to import error, but passes locally")
 class TestSlackEventsBoltHandler:
     """Test class for Slack Events Bolt Handler"""
 
