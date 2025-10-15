@@ -9,6 +9,7 @@ import boto3
 import sys
 import os
 
+# TODO: Fix mock configuration issues in CI environment to re-enable these tests
 # Skip entire file due to mock configuration issues in CI
 pytest.skip("Skipping Slack message sync tests due to mock configuration issues", allow_module_level=True)
 

@@ -2,6 +2,8 @@
 Unit tests for Slack Client Lambda function.
 """
 
+# TODO: Fix database service mock configuration issues to re-enable skipped tests
+
 import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock

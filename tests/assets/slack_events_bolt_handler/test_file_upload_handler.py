@@ -2,6 +2,8 @@
 Unit tests for Slack Events Bolt Handler file upload functionality.
 """
 
+# TODO: Fix mock configuration issues with retry logic and request handling to re-enable skipped tests
+
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import json
