@@ -6,6 +6,7 @@ import json
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
+# TODO: Fix import conflicts in CI environment to re-enable these tests
 # Skip entire file if moto import fails (CI environment issue)
 try:
     from moto import mock_aws
