@@ -139,6 +139,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
             self,
             "SecurityIncidentResponseServiceNowClient",
             entry=path.join(path.dirname(__file__), "..", "assets/service_now_client"),
+            handler="handler",
             runtime=aws_lambda.Runtime.PYTHON_3_13,
             timeout=Duration.minutes(15),
             layers=[domain_layer, mappers_layer, wrappers_layer],
@@ -342,6 +343,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
                 "..",
                 "assets/service_now_secret_rotation_handler",
             ),
+            handler="handler",
             runtime=aws_lambda.Runtime.PYTHON_3_13,
             timeout=Duration.minutes(5),
             role=service_now_secret_rotation_handler_role,
@@ -445,6 +447,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
             entry=path.join(
                 path.dirname(__file__), "..", "assets/service_now_notifications_handler"
             ),
+            handler="handler",
             runtime=aws_lambda.Runtime.PYTHON_3_13,
             layers=[domain_layer, mappers_layer, wrappers_layer],
             environment={
@@ -518,6 +521,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
                 "..",
                 "assets/service_now_api_gateway_authorizer",
             ),
+            handler="handler",
             runtime=aws_lambda.Runtime.PYTHON_3_13,
             timeout=Duration.seconds(30),
             environment={
@@ -670,6 +674,7 @@ class AwsSecurityIncidentResponseServiceNowIntegrationStack(Stack):
                 "..",
                 "assets/service_now_resource_setup_handler",
             ),
+            handler="handler",
             runtime=aws_lambda.Runtime.PYTHON_3_13,
             timeout=Duration.minutes(5),
             environment={

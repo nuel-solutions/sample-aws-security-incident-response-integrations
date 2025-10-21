@@ -145,6 +145,7 @@ class AwsSecurityIncidentResponseJiraIntegrationStack(Stack):
             entry=path.join(
                 path.dirname(__file__), "..", "assets/jira_notifications_handler"
             ),
+            handler="handler",
             runtime=aws_lambda.Runtime.PYTHON_3_13,
             layers=[domain_layer, mappers_layer, wrappers_layer],
             environment={
