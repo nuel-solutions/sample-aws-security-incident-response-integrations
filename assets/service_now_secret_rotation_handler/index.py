@@ -218,7 +218,7 @@ class ServiceNowApiService:
             return None
 
 
-def lambda_handler(event, context):
+def handler(event, context):
     """
     Lambda function to rotate API Gateway authorization token.
 
