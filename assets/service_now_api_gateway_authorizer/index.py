@@ -9,7 +9,7 @@ logger.setLevel(logging.INFO)
 secrets_client = boto3.client("secretsmanager")
 
 
-def lambda_handler(event, context):
+def handler(event, context):
     """
     Lambda authorizer for ServiceNow API Gateway.
 
