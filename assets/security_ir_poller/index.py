@@ -512,7 +512,7 @@ def store_incidents_in_dynamodb(
         return False
 
 
-def lambda_handler(event: Dict, context: Any) -> Dict:
+def handler(event: Dict, context: Any) -> Dict:
     """
     Lambda handler to process security incidents.
 
