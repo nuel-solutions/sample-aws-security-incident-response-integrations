@@ -62,10 +62,12 @@ class TestIntegrationStructure:
                         assert os.path.isfile(file_path), f"Path exists but is not a file: {file_path}"
 
     def test_handler_index_files_have_lambda_handler(self, integration_patterns):
-        """Test that index.py files contain lambda_handler or handler function."""
-        # Production integrations (Jira/ServiceNow) use 'handler' function
-        # New integrations (Slack) should use 'lambda_handler' function
-        # Updated to accommodate both patterns for production vs new integrations
+        """Test that index.py files contain appropriate handler function.
+        
+        Production integrations (Jira/ServiceNow) use 'handler' function to maintain
+        compatibility with existing deployments. New integrations (Slack) use 'lambda_handler'.
+        """
+        # Define which integrations are production (use handler) vs new (use lambda_handler)
         production_integrations = {'jira', 'service_now'}
         
         for integration, directories in integration_patterns.items():
@@ -76,12 +78,12 @@ class TestIntegrationStructure:
                         content = f.read()
                         
                     if integration in production_integrations:
-                        # Production integrations can use either handler or lambda_handler
-                        has_handler = "def handler" in content or "def lambda_handler" in content
-                        assert has_handler, f"Missing handler or lambda_handler in {index_path}"
+                        # Production integrations: accept either handler or lambda_handler
+                        has_valid_handler = "def handler" in content or "def lambda_handler" in content
+                        assert has_valid_handler, f"Missing handler or lambda_handler function in {index_path}"
                     else:
-                        # New integrations should use lambda_handler
-                        assert "def lambda_handler" in content, f"Missing lambda_handler in {index_path}"
+                        # New integrations: require lambda_handler
+                        assert "def lambda_handler" in content, f"Missing lambda_handler function in {index_path}"
 
     def test_handler_requirements_files_not_empty(self, integration_patterns):
         """Test that requirements.txt files are not empty."""
