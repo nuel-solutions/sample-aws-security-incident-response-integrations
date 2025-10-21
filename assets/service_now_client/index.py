@@ -775,7 +775,7 @@ class IncidentService:
                 os.remove(download_path)
 
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler to process security incidents.
 
