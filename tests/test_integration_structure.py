@@ -65,6 +65,7 @@ class TestIntegrationStructure:
         """Test that index.py files contain lambda_handler or handler function."""
         # Production integrations (Jira/ServiceNow) use 'handler' function
         # New integrations (Slack) should use 'lambda_handler' function
+        # Updated to accommodate both patterns for production vs new integrations
         production_integrations = {'jira', 'service_now'}
         
         for integration, directories in integration_patterns.items():
