@@ -505,7 +505,7 @@ class ServiceNowApiService:
             return None
 
 
-def lambda_handler(event, context):
+def handler(event, context):
     """
     Custom resource handler to create ServiceNow resources.
 
