@@ -666,7 +666,7 @@ def json_datetime_encoder(obj: Any) -> str:
     raise TypeError(f"Type {type(obj)} not serializable")
 
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Lambda handler to process security incidents.
 
     Args:
@@ -676,32 +676,35 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Dictionary containing response status and details
     """
-    EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "security-ir")
-    JIRA_ISSUE_TYPE = os.environ.get("JIRA_ISSUE_TYPE", "Task")
-
-    # Get the Jira project key from SSM parameter store
     try:
-        ssm_client = boto3.client("ssm")
-        JIRA_PROJECT_KEY = ssm_client.get_parameter(
-            Name=os.environ.get("JIRA_PROJECT_KEY")
-        )["Parameter"]["Value"]
-    except Exception as e:
-        logger.error(f"Error retrieving Jira project key from SSM: {str(e)}")
-        return {
-            "statusCode": 500,
-            "body": json.dumps("Error retrieving Jira project key from SSM"),
-        }
+        EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "security-ir")
+        JIRA_ISSUE_TYPE = os.environ.get("JIRA_ISSUE_TYPE", "Task")
 
-    # Only process events from Security Incident Response
-    if event.get("source") == EVENT_SOURCE:
-        incident_service = IncidentService()
-        incident_service.create_or_update_issue(
-            event, JIRA_PROJECT_KEY, JIRA_ISSUE_TYPE
-        )
-    else:
-        logger.info(
-            "Jira Client lambda will skip processing of this event as the event source is not security-ir"
-        )
+        # Get the Jira project key from SSM parameter store
+        try:
+            ssm_client = boto3.client("ssm")
+            JIRA_PROJECT_KEY = ssm_client.get_parameter(
+                Name=os.environ.get("JIRA_PROJECT_KEY")
+            )["Parameter"]["Value"]
+        except Exception as e:
+            logger.error(f"Error retrieving Jira project key from SSM: {str(e)}")
+            return {
+                "statusCode": 500,
+                "body": json.dumps("Error retrieving Jira project key from SSM"),
+            }
+
+        # Only process events from Security Incident Response
+        if event.get("source") == EVENT_SOURCE:
+            incident_service = IncidentService()
+            incident_service.create_or_update_issue(
+                event, JIRA_PROJECT_KEY, JIRA_ISSUE_TYPE
+            )
+        else:
+            logger.info(
+                "Jira Client lambda will skip processing of this event as the event source is not security-ir"
+            )
+    except Exception as e:
+        logger.error(f"Error in handler: {str(e)}")
 
     return {
         "statusCode": 200,
