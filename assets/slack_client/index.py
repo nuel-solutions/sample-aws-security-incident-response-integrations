@@ -108,7 +108,7 @@ class DatabaseService:
             bool: True if successful, False otherwise
         """
         try:
-            current_timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+            current_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self.table.update_item(
                 Key={"PK": f"Case#{case_id}", "SK": "latest"},
                 UpdateExpression="set slackChannelId = :s, slackChannelUpdateTimestamp = :t",
@@ -141,7 +141,7 @@ class DatabaseService:
             bool: True if successful, False otherwise
         """
         try:
-            current_timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+            current_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
             update_expression_parts = ["slackChannelUpdateTimestamp = :t"]
             expression_values = {":t": current_timestamp}
 
@@ -541,7 +541,7 @@ class SlackService:
                 "createdDate": comment.get("createdDate", ""),
                 "createdBy": comment.get("createdBy", {}),
                 "syncedToSlack": True,
-                "syncTimestamp": datetime.datetime.now(datetime.UTC).isoformat()
+                "syncTimestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
             }
 
             # Add to comments list
@@ -695,14 +695,14 @@ class SlackService:
                 "user": message.get("user", ""),
                 "text": message.get("text", ""),
                 "syncedToSIR": True,
-                "syncTimestamp": datetime.datetime.now(datetime.UTC).isoformat()
+                "syncTimestamp": datetime.datetime.now(datetime.timezone.utc).isoformat()
             }
 
             # Add to synced messages list
             synced_messages.append(message_record)
 
             # Update database - we need to extend the database service for this
-            current_timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+            current_timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self.db_service.table.update_item(
                 Key={"PK": f"Case#{case_id}", "SK": "latest"},
                 UpdateExpression="set slackSyncedMessages = :messages, slackChannelUpdateTimestamp = :timestamp",
