@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 import time
 
 # TODO: Fix mock configuration issues in CI environment to re-enable these tests
+# https://app.asana.com/1/8442528107068/project/1209571477232011/task/1211611017424273?focus=true
 # Skip entire file due to mock configuration issues in CI
 pytest.skip("Skipping Slack Bolt wrapper tests due to mock configuration issues", allow_module_level=True)
 
