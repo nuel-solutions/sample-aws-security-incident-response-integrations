@@ -765,9 +765,93 @@ class SlackService:
                 logger.warning(f"No Slack channel found for case {case_id}")
                 return False
 
-            # Check file size limits (Slack has 1GB limit, but we'll be more conservative)
+            # Extract attachment details
+            attachment_id = attachment.get("attachmentId", "")
+            filename = attachment.get("fileName", "attachment")
+            
+            # Check file size limits before download if size is available
+            max_size = 100 * 1024 * 1024  # 100MB
             file_size = attachment.get("size", 0)
-            max_size = 100 * 1024 * 1024  # 100MB limit
+            if file_size > max_size:
+                # Add system comment to AWS SIR case about size limit
+                error_comment = create_system_comment(
+                    f"Large attachment '{filename}' ({file_size} bytes) could not be uploaded to Slack due to size limits"
+                )
+                self._add_system_comment_to_case(case_id, error_comment)
+                return False
+            
+            # Download attachment from AWS SIR
+            try:
+                # Get presigned URL for download
+                presigned_response = security_incident_response_client.get_case_attachment_download_url(
+                    caseId=case_id,
+                    attachmentId=attachment_id
+                )
+                
+                download_url = presigned_response.get("attachmentPresignedUrl")
+                if not download_url:
+                    logger.error(f"Failed to get download URL for attachment {attachment_id}")
+                    return False
+
+                # Download the file content
+                import requests
+                response = requests.get(download_url, timeout=30)
+                response.raise_for_status()
+                
+                file_content = response.content
+                
+                # Check file size limits (Slack has a 1GB limit, but we'll be more conservative)
+                max_size = 100 * 1024 * 1024  # 100MB
+                if len(file_content) > max_size:
+                    # Post a message about the large file instead
+                    message = f"📎 Large attachment '{filename}' ({len(file_content)} bytes) from AWS SIR case {case_id} could not be uploaded due to size limits. Please download from the Security IR case."
+                    self.slack_client.post_message(slack_channel_id, message)
+                    
+                    # Also add system comment to AWS SIR case
+                    error_comment = create_system_comment(
+                        f"Large attachment '{filename}' ({len(file_content)} bytes) could not be uploaded to Slack due to size limits"
+                    )
+                    self._add_system_comment_to_case(case_id, error_comment)
+                    return False
+                
+                # Upload to Slack
+                success = self.slack_client.upload_file(
+                    channel_id=slack_channel_id,
+                    file_content=file_content,
+                    filename=filename,
+                    title=f"Attachment from AWS SIR Case {case_id}",
+                    initial_comment=f"📎 Attachment from AWS Security Incident Response case {case_id}"
+                )
+                
+                if success:
+                    logger.info(f"Successfully synced attachment {filename} to Slack for case {case_id}")
+                    return True
+                else:
+                    logger.error(f"Failed to upload attachment {filename} to Slack for case {case_id}")
+                    # Add system comment to AWS SIR case about upload failure
+                    error_comment = create_system_comment(
+                        f"Failed to upload attachment '{filename}' to Slack"
+                    )
+                    self._add_system_comment_to_case(case_id, error_comment)
+                    return False
+                    
+            except Exception as download_error:
+                logger.error(f"Error downloading attachment {attachment_id}: {str(download_error)}")
+                # Post error message to Slack
+                error_message = f"❌ Failed to sync attachment '{filename}' from AWS SIR case {case_id}: {str(download_error)}"
+                self.slack_client.post_message(slack_channel_id, error_message)
+                
+                # Also add system comment to AWS SIR case
+                error_comment = create_system_comment(
+                    f"Failed to sync attachment '{filename}' to Slack",
+                    str(download_error)
+                )
+                self._add_system_comment_to_case(case_id, error_comment)
+                return False
+
+        except Exception as e:
+            logger.error(f"Error syncing attachment to Slack for case {case_id}: {str(e)}")
+            return False
             
             if file_size > max_size:
                 error_msg = f"Attachment '{attachment.get('filename', 'unknown')}' exceeds size limit ({file_size} bytes > {max_size} bytes)"
@@ -1210,12 +1294,136 @@ class IncidentService:
             return False
 
 
+class IncidentService:
+    """Class to handle incident operations"""
+
+    def __init__(self):
+        """Initialize the incident service."""
+        self.slack_service = SlackService()
+        self.db_service = DatabaseService()
+
+    def extract_case_details(
+        self, ir_case: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], str, str, str]:
+        """Extract case details from an IR case.
+
+        Args:
+            ir_case (Dict[str, Any]): IR case data
+
+        Returns:
+            Tuple[Dict[str, Any], str, str, str]: Tuple of (ir_case_detail, ir_event_type, ir_case_id, sir_case_status)
+        """
+        ir_case_detail = ir_case["detail"]
+        ir_event_type = ir_case_detail["eventType"]
+        ir_case_arn = ir_case_detail["caseArn"]
+
+        try:
+            # TODO: update the following to retrieve GUID from ARN when the service starts using GUIDs
+            ir_case_id = re.search(r"/(\d+)$", ir_case_arn).group(1)
+        except (AttributeError, IndexError):
+            logger.error(f"Failed to extract case ID from ARN: {ir_case_arn}")
+            raise ValueError(f"Invalid case ARN format: {ir_case_arn}")
+
+        sir_case_status = ir_case_detail.get("caseStatus")
+
+        return ir_case_detail, ir_event_type, ir_case_id, sir_case_status
+
+    def process_case_event(self, ir_case: Dict[str, Any]) -> bool:
+        """Process a security incident event from AWS SIR.
+
+        Args:
+            ir_case (Dict[str, Any]): IR case data
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Extract case details
+            ir_case_detail, ir_event_type, ir_case_id, sir_case_status = (
+                self.extract_case_details(ir_case)
+            )
+
+            # Handle based on event type
+            if ir_event_type == "CaseCreated":
+                channel_id = self.slack_service.create_channel_for_case(ir_case_id, ir_case_detail)
+                return channel_id is not None
+            elif ir_event_type == "CaseUpdated":
+                # Determine update type based on changed fields
+                update_type = self._determine_update_type(ir_case_detail)
+                return self.slack_service.update_channel_for_case(
+                    ir_case_id, ir_case_detail, update_type
+                )
+            elif ir_event_type == "CommentAdded":
+                # Handle comment synchronization
+                comments = ir_case_detail.get("caseComments", [])
+                if comments:
+                    # Get the latest comment
+                    latest_comment = comments[-1] if isinstance(comments, list) else comments
+                    return self.slack_service.sync_comment_to_slack(ir_case_id, latest_comment)
+                return True
+            elif ir_event_type == "AttachmentAdded":
+                # Handle attachment synchronization
+                attachments = ir_case_detail.get("caseAttachments", [])
+                if attachments:
+                    # Get the latest attachment
+                    latest_attachment = attachments[-1] if isinstance(attachments, list) else attachments
+                    return self.slack_service.sync_attachment_to_slack(ir_case_id, latest_attachment)
+                return True
+            else:
+                logger.warning(f"Unhandled event type: {ir_event_type}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error processing security incident: {str(e)}")
+            return False
+
+    def process_slack_event(self, event: Dict[str, Any]) -> bool:
+        """Process a Slack event (for future use with bidirectional sync).
+
+        Args:
+            event (Dict[str, Any]): Slack event data
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # This would handle events from Slack (messages, file uploads, etc.)
+            # For now, this is a placeholder for future bidirectional sync
+            logger.info("Slack event processing not yet implemented")
+            return True
+        except Exception as e:
+            logger.error(f"Error processing Slack event: {str(e)}")
+            return False
+
+    def _determine_update_type(self, case_detail: Dict[str, Any]) -> str:
+        """Determine the type of case update based on changed fields.
+
+        Args:
+            case_detail (Dict[str, Any]): Case detail data
+
+        Returns:
+            str: Update type (status, title, description, watchers, etc.)
+        """
+        # This is a simplified implementation - in practice, you might want to
+        # compare with previous state to determine what actually changed
+        if "caseStatus" in case_detail:
+            return "status"
+        elif "title" in case_detail:
+            return "title"
+        elif "description" in case_detail:
+            return "description"
+        elif "watchers" in case_detail:
+            return "watchers"
+        else:
+            return "general"
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Lambda handler for processing AWS SIR events and Slack events.
+    Lambda handler for processing AWS SIR events and syncing to Slack.
     
     Args:
-        event: EventBridge event containing AWS SIR case information or Slack event
+        event: EventBridge event containing AWS SIR case information
         context: Lambda context object
         
     Returns:
@@ -1227,23 +1435,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "security-ir")
         event_source = event.get("source", "")
         
-        # Only process events from the configured EVENT_SOURCE
+        # Only process events from Security Incident Response
         if event_source == EVENT_SOURCE:
             incident_service = IncidentService()
-            
-            # Process based on event source
-            if event_source == "security-ir":
-                # Process AWS SIR events
-                success = incident_service.process_case_event(event)
-            elif event_source == "slack":
-                # Process Slack events
-                success = incident_service.process_slack_event(event)
-            else:
-                logger.info(f"Slack Client lambda will skip processing event from unsupported source: {event_source}")
-                return {
-                    "statusCode": 200,
-                    "body": json.dumps(f"Event skipped - unsupported source: {event_source}")
-                }
+            success = incident_service.process_case_event(event)
             
             if success:
                 return {
@@ -1256,7 +1451,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     "body": json.dumps({"error": "Failed to process event"})
                 }
         else:
-            logger.info(f"Slack Client lambda will skip processing event from non-configured source: {event_source}")
+            logger.info(f"Slack Client lambda will skip processing event from source: {event_source}")
             return {
                 "statusCode": 200,
                 "body": json.dumps(f"Event skipped - source {event_source} not matching EVENT_SOURCE {EVENT_SOURCE}")

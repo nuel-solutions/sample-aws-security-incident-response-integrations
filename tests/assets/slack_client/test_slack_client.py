@@ -341,7 +341,7 @@ class TestSlackService:
              patch('index.map_attachment_to_slack_file') as mock_map_attachment:
             
             mock_sir_client.get_case_attachment_download_url.return_value = {
-                "attachmentDownloadUrl": "https://example.com/download/test_file.pdf"
+                "attachmentPresignedUrl": "https://example.com/download/test_file.pdf"
             }
             
             # Mock attachment mapping
@@ -460,7 +460,7 @@ class TestSlackService:
         
         with patch('index.security_incident_response_client') as mock_sir_client:
             mock_sir_client.get_case_attachment_download_url.return_value = {
-                "attachmentDownloadUrl": "https://example.com/download/test_file.pdf"
+                "attachmentPresignedUrl": "https://example.com/download/test_file.pdf"
             }
             mock_sir_client.create_case_comment.return_value = {}
             
@@ -510,7 +510,7 @@ class TestSlackService:
              patch('index.map_attachment_to_slack_file') as mock_map_attachment:
             
             mock_sir_client.get_case_attachment_download_url.return_value = {
-                "attachmentDownloadUrl": "https://example.com/download/test_file.pdf"
+                "attachmentPresignedUrl": "https://example.com/download/test_file.pdf"
             }
             mock_sir_client.create_case_comment.return_value = {}
             
