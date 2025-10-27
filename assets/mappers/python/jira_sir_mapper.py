@@ -53,12 +53,10 @@ def map_case_status(sir_case_status: str) -> Tuple[str, Optional[str]]:
     Maps AWS Security Incident Response case status to JIRA workflow status
 
     Args:
-        sir_case_status: Status from AWS Security Incident Response case
+        sir_case_status (str): Status from AWS Security Incident Response case
 
     Returns:
-        Tuple containing:
-        - JIRA status
-        - Comment to add if the mapping is not direct (None if direct mapping)
+        Tuple[str, Optional[str]]: Tuple containing JIRA status and optional comment
     """
     jira_status = STATUS_MAPPING.get(sir_case_status, DEFAULT_JIRA_STATUS)
 

@@ -1,18 +1,25 @@
-# ServiceNow Integration is not released yet
+# ServiceNow Integration for AWS Security Incident Response
 
-This document will provide, when its ready, an overview of the AWS Security Incident Response ServiceNow integration, including its architecture, resources, parameters, and outputs.
+This document provides an overview of the AWS Security Incident Response ServiceNow integration, including its architecture, resources, parameters, and deployment instructions.
 
 ## Deployment
 
 ```bash
 # Deploy the integration with a single command
 ./deploy-integrations-solution.py service-now \
-  --instance <your-servicenow-instance-id> \
+  --instance-id <your-servicenow-instance-id> \
   --username <your-servicenow-username> \
   --password <your-servicenow-password> \
+  --integration-module <itsm|ir> \
   --log-level info
 ```
-See the section below for instructions on how to obtain your ServiceNow instance id, username and password
+
+### Integration Module Options
+
+- **`itsm`**: IT Service Management module - Uses standard ServiceNow incident table (`incident`)
+- **`ir`**: Incident Response module - Uses ServiceNow Security Incident Response table (`sn_si_incident`)
+
+See the Prerequisites section below for instructions on how to obtain your ServiceNow instance id, username and password, configure aws profile, and install necessary tools required to deploy the integration.
 
 ## Prerequisites
 
@@ -42,6 +49,85 @@ See the section below for instructions on how to obtain your ServiceNow instance
 
 **Best Practice:** Create a dedicated service account rather than using a personal account.
 
+### Retrieve aws credentials for configuring profile
+
+1. `AWS Access Key ID`
+2. `AWS Secret Access Key`
+3. `AWS Session Token`
+
+### Install the necessary tools
+
+#### Using AWS Console (EC2 instance)
+
+1. Navigate to EC2 in AWS Console
+2. Launch a new instance
+   1. Provide any `Name`
+   2. Keep the **default** settings for `Application and OS images`:
+      1. Keep the **default** `Amazon Linux` OS
+      2. Keep the **default**, Free tier eligible AMI - `Amazon Linux 2023 kernel-6.1 AMI`
+         ![EC2-OS](../images/ec2-os.png)
+   3. In `Instance type`:
+      1. Select `t2.large`
+         ![EC2-Instance-type](../images/ec2-instance-type.png)
+   4. In `Key pair`, either select an existing key pair from the drop down or create a new one:
+         ![EC2-key-pair](../images/ec2-key-pair.png)
+   5. Keep everything else as **default**
+   6. Click on `Launch Instance`
+3. Once the instance is up and running, select the instance and click on `Connect`. Then, connect using `EC2 Instance Connect`:
+      ![EC2-instance-connect](../images/ec2-instance-connect.png)
+4. Once connected, simply copy and paste the following set of commands:
+   ```
+   sudo yum install git -y
+   sudo yum install docker
+   sudo yum install -y nodejs
+   sudo npm install -g aws-cdk
+   node -v
+   npm -v
+   npx -v
+   sudo yum install python3 python3-pip -y
+   git clone https://github.com/aws-samples/sample-aws-security-incident-response-integrations.git
+   cd sample-aws-security-incident-response-integrations/
+   pip install -r requirements.txt
+   chmod +x deploy-integrations-solution.py
+   sudo systemctl start docker.service
+   sudo chmod 666 /var/run/docker.sock
+   ```
+5. Configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
+   ```
+   export AWS_ACCESS_KEY_ID=<AWS Access Key ID>
+   export AWS_SECRET_ACCESS_KEY=<AWS Secret Access Key>
+   export AWS_SESSION_TOKEN=<AWS Session Token>
+   ```
+6. Now, run the `deploy` command from the [Deployment](#deployment) section
+
+#### Using local terminal instance
+
+1. Open a new Terminal session
+2. Copy and paste the following set of commands:
+   ```
+   sudo yum install git -y
+   sudo yum install docker
+   sudo yum install -y nodejs
+   sudo npm install -g aws-cdk
+   node -v
+   npm -v
+   npx -v
+   sudo yum install python3 python3-pip -y
+   git clone https://github.com/aws-samples/sample-aws-security-incident-response-integrations.git
+   cd sample-aws-security-incident-response-integrations/
+   pip install -r requirements.txt
+   chmod +x deploy-integrations-solution.py
+   sudo systemctl start docker.service
+   sudo chmod 666 /var/run/docker.sock
+   ```
+3. Configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
+   ```
+   export AWS_ACCESS_KEY_ID=<AWS Access Key ID>
+   export AWS_SECRET_ACCESS_KEY=<AWS Secret Access Key>
+   export AWS_SESSION_TOKEN=<AWS Session Token>
+   ```
+4. Now, run the `deploy` command from the [Deployment](#deployment) section
+
 ### Secure Your Credentials (Optional)
 
 1. Store your ServiceNow credentials securely
@@ -59,11 +145,28 @@ The ServiceNow integration stack requires the following parameters during deploy
 | `serviceNowInstanceId` | The ServiceNow instance ID (subdomain of your ServiceNow URL) | String | Yes | `dev12345` (from dev12345.service-now.com) |
 | `serviceNowUser` | The username for ServiceNow API access (must have admin privileges to create business rules) | String | Yes | `admin` or `integration_user` |
 | `serviceNowPassword` | The password for ServiceNow API access | String | Yes | `********` |
+| `integrationModule` | ServiceNow integration module type | String | Yes | `itsm` (IT Service Management) or `ir` (Incident Response) |
 | `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
 
-## Post Deployment
+## Post Deployment Verification
 
-Create a test Case in AWS Security Incident Response and verify it appears as Incident in Service Now
+### Test AWS to ServiceNow Flow
+1. Create a test case in AWS Security Incident Response
+2. Verify the incident appears in ServiceNow with correct details
+3. Add comments and attachments to the Security IR case
+4. Confirm they synchronize to the ServiceNow incident
+
+### Test ServiceNow to AWS Flow
+1. Create a test incident in ServiceNow
+2. Verify a corresponding case is created in AWS Security Incident Response
+3. Update the ServiceNow incident (status, comments, attachments)
+4. Confirm changes synchronize to the Security IR case
+
+### Verify Business Rules
+1. Navigate to **System Definition > Business Rules** in ServiceNow
+2. Search for rules with your resource prefix
+3. Verify both incident and attachment business rules are active
+4. Test rule execution by creating/updating incidents and attachments
 
 ## Architecture
 
@@ -190,11 +293,108 @@ The ServiceNow integration stack creates the following AWS resources:
 The ServiceNow Resource Setup Lambda creates the following components in your ServiceNow instance:
 
 1. **Business Rules**:
-   - **Incident Created Rule**: Triggers when a new incident is created in ServiceNow
-   - **Incident Updated Rule**: Triggers when an incident is updated in ServiceNow
-   - **Incident Deleted Rule**: Triggers when an incident is deleted in ServiceNow
-   - Each rule is configured to send incident data to AWS via the outbound REST message
-   - Rules are prefixed with the Lambda function name for easy identification
+   - **Incident Business Rule**: Triggers when incidents are created, updated, or deleted in ServiceNow
+     - Monitors the `incident` table
+     - Sends `IncidentCreated` or `IncidentUpdated` events to AWS
+     - Includes incident number and system ID in the payload
+   - **Attachment Business Rule**: Triggers when attachments are added, updated, or deleted on incidents
+     - Monitors the `sys_attachment` table for incident-related attachments
+     - Sends `IncidentUpdated` events when attachment changes occur
+     - Includes attachment action type (added/updated/deleted) in the payload
+     - Only processes attachments related to the incident table
+   - Rules are prefixed with the resource prefix for easy identification
+
+2. **Outbound REST Messages**:
+   - **Primary REST Message**: Handles incident and attachment event notifications
+   - **HTTP POST Function**: Configured to send JSON payloads to the API Gateway webhook
+   - **Authorization Headers**: Automatically configured with Bearer token authentication
+   - **Request Parameters**: Dynamically configured based on the event payload structure
+
+3. **Authentication**:
+   - **API Gateway Secret**: Stored in AWS Secrets Manager for secure webhook authentication
+   - **Automatic Token Rotation**: Supports token rotation via AWS Secrets Manager
+   - **Bearer Token Authentication**: Used for all webhook requests to AWS
+
+## Key Features
+
+### Bidirectional Synchronization
+- **AWS to ServiceNow**: Security IR cases automatically create/update ServiceNow incidents
+- **ServiceNow to AWS**: ServiceNow incident changes trigger updates in Security IR cases
+- **Real-time Updates**: Event-driven architecture ensures near-instantaneous synchronization
+
+### Attachment Handling
+- **Size Limits**: Attachments larger than 5MB are handled via comments with download instructions
+- **Duplicate Prevention**: Checks for existing attachment comments before adding new ones
+- **Error Handling**: Failed uploads result in informative comments with fallback instructions
+- **Bidirectional Sync**: Attachments are synchronized in both directions when possible
+
+### Comment Synchronization
+- **Bidirectional Comments**: Comments are synchronized between both systems
+- **Duplicate Prevention**: Prevents duplicate comments using content matching
+- **Update Tags**: Uses system tags to identify and skip system-generated updates
+- **Rich Content**: Supports formatted comments and work notes
+
+### Status Mapping
+- **Intelligent Mapping**: Maps Security IR case statuses to appropriate ServiceNow incident states
+- **Workflow Support**: Handles ServiceNow workflow transitions automatically
+- **Closure Handling**: Properly manages incident closure and resolution codes
+
+## Troubleshooting
+
+For detailed troubleshooting information, common issues, and diagnostic steps, please refer to the [ServiceNow Integration Troubleshooting Guide](SERVICE_NOW_TROUBLESHOOTING.md).
+
+## Security Considerations
+
+### Credential Management
+- ServiceNow credentials are stored securely in SSM Parameter Store
+- API Gateway authentication tokens are managed via AWS Secrets Manager
+- Automatic token rotation is supported for enhanced security
+
+### Network Security
+- All communications use HTTPS/TLS encryption
+- API Gateway endpoints are secured with custom authorizers
+- ServiceNow webhook requests include proper authentication headers
+
+### Access Control
+- Lambda functions use least-privilege IAM roles
+- ServiceNow integration user should have minimal required permissions
+- DynamoDB access is restricted to specific table operations
+
+## Advanced Configuration
+
+### Custom Field Mapping
+Modify the `service_now_sir_mapper.py` file to customize field mappings between ServiceNow and Security IR:
+
+```python
+FIELD_MAPPING = {
+    "short_description": "title",
+    "description": "description",
+    "comments_and_work_notes": "caseComments",
+    # Add custom field mappings here
+}
+```
+
+### Status Mapping Customization
+Update the status mapping in `service_now_sir_mapper.py`:
+
+```python
+STATUS_MAPPING = {
+    "Detection and Analysis": "2",  # In Progress
+    "Containment, Eradication and Recovery": "2",  # In Progress
+    "Post-incident Activities": "2",  # In Progress
+    "Closed": "7",  # Closed
+    # Add custom status mappings here
+}
+```
+
+### Business Rule Customization
+The ServiceNow business rules can be customized after deployment by modifying them directly in ServiceNow or by updating the `service_now_resource_setup_handler` code and redeploying.
+
+## Additional Resources
+
+- [ServiceNow Integration Troubleshooting Guide](SERVICE_NOW_TROUBLESHOOTING.md) - Comprehensive troubleshooting, validation, and diagnostic information
+- [AWS Security Incident Response Documentation](https://docs.aws.amazon.com/security-ir/) - Official AWS Security Incident Response service documentation
+- [ServiceNow REST API Documentation](https://docs.servicenow.com/bundle/vancouver-application-development/page/integrate/inbound-rest/concept/c_RESTAPI.html) - ServiceNow REST API reference identification
 
 2. **Outbound REST Messages**:
    - **AWS Security IR Integration Message**: Configured to send incident data to the API Gateway webhook URL
@@ -222,30 +422,39 @@ The stack provides the following outputs that can be used for integration:
    - Ensure you have a ServiceNow instance with admin access
    - Create a dedicated service account for the integration if needed
 
-2. **Deploy the Stack**:
+2. **Install the required tooling**
+   - Ensure you have executed the set of commands to install the necessary tooling required to perform the deployment of the integration
+   - You can do so either in AWS Console via an EC2 instance or in local bash/terminal
+  
+3. **Deploy the Stack**:
    ```bash
    # Using the deploy-integrations-solution script
    deploy-integrations-solution service-now \
      --instance-id <your-servicenow-instance-id> \
      --username <your-servicenow-username> \
      --password <your-servicenow-password> \
+     --integration-module <itsm|ir> \
      --log-level info
    ```
    
-   Note: The `--log-level` parameter is optional and defaults to `error`. Valid values are `info`, `debug`, and `error`.
+   **Required Parameters:**
+   - `--integration-module`: Choose `itsm` for IT Service Management or `ir` for Incident Response module
+   
+   **Optional Parameters:**
+   - `--log-level`: Defaults to `error`. Valid values are `info`, `debug`, and `error`
 
-3. **Automatic Configuration**:
+4. **Automatic Configuration**:
    - The ServiceNow Resource Setup Lambda will automatically:
      - Create business rules in ServiceNow to detect incident changes
      - Configure outbound REST messages to send data to the API Gateway
      - Set up the webhook URL in ServiceNow
 
-4. **Verify the Setup**:
+5. **Verify the Setup**:
    - Check CloudFormation outputs for the webhook URL
    - Verify in ServiceNow that the business rules and outbound REST messages were created
    - The business rules will be prefixed with the Lambda function name for easy identification
 
-5. **Test the Integration**:
+6. **Test the Integration**:
    - Create a test incident in ServiceNow
    - Verify that the incident appears in AWS Security Incident Response
    - Update the incident in AWS and verify the changes appear in ServiceNow
@@ -271,7 +480,7 @@ A: The integration includes error handling and dead-letter queues. Failed events
 A: The base integration supports standard ServiceNow incident fields. For custom fields, you'll need to modify the Lambda functions and ServiceNow scripts.
 
 **Q: Can I use this with ServiceNow's Security Incident Response module?**  
-A: Yes, the integration can be adapted to work with ServiceNow's Security Incident Response module by modifying the business rules to target security incidents instead of standard incidents.
+A: Yes, the integration supports ServiceNow's Security Incident Response module. Use `--integration-module ir` during deployment to target the `sn_si_incident` table instead of the standard `incident` table.
 
 ### Technical Questions
 
