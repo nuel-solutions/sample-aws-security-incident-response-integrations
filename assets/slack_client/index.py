@@ -9,7 +9,7 @@ import os
 import re
 import datetime
 import time
-import random
+import secrets
 from functools import wraps
 from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
@@ -97,7 +97,7 @@ def exponential_backoff_retry(max_retries: int = 3, base_delay: float = 1.0, max
                     
                     # Calculate delay with exponential backoff and jitter
                     delay = min(base_delay * (2 ** attempt), max_delay)
-                    jitter = random.uniform(0, delay * 0.1)  # Add up to 10% jitter
+                    jitter = secrets.randbelow(int(delay * 0.1 * 1000)) / 1000.0  # Add up to 10% jitter (cryptographically secure)
                     total_delay = delay + jitter
                     
                     logger.warning(f"Function {func.__name__} failed on attempt {attempt + 1}, retrying in {total_delay:.2f}s: {str(e)}")
@@ -1570,7 +1570,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         # Parse event - support both Records format and direct EventBridge format
         actual_event = event
-        if "Records" in event and len(event["Records"]) > 0:
+        if "Records" in event:
+            if len(event["Records"]) == 0:
+                raise ValueError("Empty Records array - no event to process")
+            
             # Records format: event['Records'][0]['body'] contains the EventBridge event
             record_body = event["Records"][0]["body"]
             if isinstance(record_body, str):
