@@ -8,7 +8,10 @@ import logging
 import os
 import re
 import datetime
-from typing import Dict, Any, Optional, List, Tuple, Union
+import time
+import random
+from functools import wraps
+from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
 import boto3
 from botocore.exceptions import ClientError
@@ -65,6 +68,48 @@ except ImportError:
     )
 
 
+def exponential_backoff_retry(max_retries: int = 3, base_delay: float = 1.0, max_delay: float = 60.0):
+    """
+    Decorator for exponential backoff retry logic.
+    
+    Args:
+        max_retries (int): Maximum number of retry attempts
+        base_delay (float): Base delay in seconds
+        max_delay (float): Maximum delay in seconds
+    
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    
+                    if attempt == max_retries:
+                        logger.error(f"Function {func.__name__} failed after {max_retries} retries: {str(e)}")
+                        raise e
+                    
+                    # Calculate delay with exponential backoff and jitter
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    jitter = random.uniform(0, delay * 0.1)  # Add up to 10% jitter
+                    total_delay = delay + jitter
+                    
+                    logger.warning(f"Function {func.__name__} failed on attempt {attempt + 1}, retrying in {total_delay:.2f}s: {str(e)}")
+                    time.sleep(total_delay)
+            
+            # This should never be reached, but just in case
+            raise last_exception
+        
+        return wrapper
+    return decorator
+
+
 class DatabaseService:
     """Class to handle database operations"""
 
@@ -97,6 +142,7 @@ class DatabaseService:
             logger.error(f"Slack channel for Case#{case_id} not found in database")
             return None
 
+    @exponential_backoff_retry(max_retries=3, base_delay=0.5, max_delay=15.0)
     def update_slack_mapping(self, case_id: str, slack_channel_id: str) -> bool:
         """Update the mapping between an IR case and a Slack channel.
 
@@ -125,6 +171,7 @@ class DatabaseService:
             logger.error(f"Error updating DynamoDB table: {error_code}")
             return False
 
+    @exponential_backoff_retry(max_retries=3, base_delay=0.5, max_delay=15.0)
     def update_case_details(
         self, case_id: str, case_title: str = None, case_description: str = None, 
         case_comments: List[Any] = None
@@ -200,9 +247,17 @@ class SlackService:
 
     def __init__(self):
         """Initialize the Slack service."""
+        # Validate required environment variables
+        slack_bot_token_param = os.environ.get('SLACK_BOT_TOKEN', '/SecurityIncidentResponse/slackBotToken')
+        if not slack_bot_token_param:
+            raise ValueError("SLACK_BOT_TOKEN environment variable is required")
+        
+        logger.info(f"Using Slack bot token parameter: {slack_bot_token_param}")
+        
         self.slack_client = SlackBoltClient()
         self.db_service = DatabaseService()
 
+    @exponential_backoff_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def create_channel_for_case(self, case_id: str, case_data: Dict[str, Any]) -> Optional[str]:
         """Create a Slack channel for a new case.
 
@@ -265,6 +320,7 @@ class SlackService:
             self._add_system_comment_to_case(case_id, error_comment)
             return None
 
+    @exponential_backoff_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def update_channel_for_case(self, case_id: str, case_data: Dict[str, Any], 
                                update_type: str) -> bool:
         """Update a Slack channel for an existing case.
@@ -325,6 +381,7 @@ class SlackService:
             self._add_system_comment_to_case(case_id, error_comment)
             return False
 
+    @exponential_backoff_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def sync_comment_to_slack(self, case_id: str, comment: Dict[str, Any]) -> bool:
         """Sync a comment from AWS SIR to Slack with duplicate detection.
 
@@ -743,6 +800,7 @@ class SlackService:
             logger.warning(f"Could not get user name for {user_id}: {str(e)}")
             return user_id
 
+    @exponential_backoff_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def sync_attachment_to_slack(self, case_id: str, attachment: Dict[str, Any]) -> bool:
         """Sync an attachment from AWS SIR to Slack channel.
 
@@ -1343,38 +1401,114 @@ class IncidentService:
                 self.extract_case_details(ir_case)
             )
 
-            # Handle based on event type
+            # Handle based on event type using dedicated handler methods
             if ir_event_type == "CaseCreated":
-                channel_id = self.slack_service.create_channel_for_case(ir_case_id, ir_case_detail)
-                return channel_id is not None
+                return self.handle_case_created(ir_case_id, ir_case_detail)
             elif ir_event_type == "CaseUpdated":
-                # Determine update type based on changed fields
-                update_type = self._determine_update_type(ir_case_detail)
-                return self.slack_service.update_channel_for_case(
-                    ir_case_id, ir_case_detail, update_type
-                )
+                return self.handle_case_updated(ir_case_id, ir_case_detail)
             elif ir_event_type == "CommentAdded":
-                # Handle comment synchronization
-                comments = ir_case_detail.get("caseComments", [])
-                if comments:
-                    # Get the latest comment
-                    latest_comment = comments[-1] if isinstance(comments, list) else comments
-                    return self.slack_service.sync_comment_to_slack(ir_case_id, latest_comment)
-                return True
+                return self.handle_comment_added(ir_case_id, ir_case_detail)
             elif ir_event_type == "AttachmentAdded":
-                # Handle attachment synchronization
-                attachments = ir_case_detail.get("caseAttachments", [])
-                if attachments:
-                    # Get the latest attachment
-                    latest_attachment = attachments[-1] if isinstance(attachments, list) else attachments
-                    return self.slack_service.sync_attachment_to_slack(ir_case_id, latest_attachment)
-                return True
+                return self.handle_attachment_added(ir_case_id, ir_case_detail)
             else:
                 logger.warning(f"Unhandled event type: {ir_event_type}")
                 return False
 
         except Exception as e:
             logger.error(f"Error processing security incident: {str(e)}")
+            return False
+
+    def handle_case_created(self, case_id: str, case_detail: Dict[str, Any]) -> bool:
+        """Handle CaseCreated event by creating a new Slack channel.
+
+        Args:
+            case_id (str): The IR case ID
+            case_detail (Dict[str, Any]): Case detail data from AWS SIR
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Handling CaseCreated event for case {case_id}")
+            channel_id = self.slack_service.create_channel_for_case(case_id, case_detail)
+            return channel_id is not None
+        except Exception as e:
+            logger.error(f"Error handling CaseCreated event for case {case_id}: {str(e)}")
+            return False
+
+    def handle_case_updated(self, case_id: str, case_detail: Dict[str, Any]) -> bool:
+        """Handle CaseUpdated event by updating the Slack channel.
+
+        Args:
+            case_id (str): The IR case ID
+            case_detail (Dict[str, Any]): Case detail data from AWS SIR
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Handling CaseUpdated event for case {case_id}")
+            # Determine update type based on changed fields
+            update_type = self._determine_update_type(case_detail)
+            return self.slack_service.update_channel_for_case(
+                case_id, case_detail, update_type
+            )
+        except Exception as e:
+            logger.error(f"Error handling CaseUpdated event for case {case_id}: {str(e)}")
+            return False
+
+    def handle_comment_added(self, case_id: str, case_detail: Dict[str, Any]) -> bool:
+        """Handle CommentAdded event by syncing comment to Slack.
+
+        Args:
+            case_id (str): The IR case ID
+            case_detail (Dict[str, Any]): Case detail data from AWS SIR
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Handling CommentAdded event for case {case_id}")
+            # Handle comment synchronization
+            comments = case_detail.get("caseComments", [])
+            if comments:
+                # Get the latest comment
+                latest_comment = comments[-1] if isinstance(comments, list) else comments
+                return self.slack_service.sync_comment_to_slack(case_id, latest_comment)
+            else:
+                logger.warning(f"No comments found in CommentAdded event for case {case_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Error handling CommentAdded event for case {case_id}: {str(e)}")
+            return False
+
+    def handle_attachment_added(self, case_id: str, case_detail: Dict[str, Any]) -> bool:
+        """Handle AttachmentAdded event by syncing attachment to Slack.
+
+        Args:
+            case_id (str): The IR case ID
+            case_detail (Dict[str, Any]): Case detail data from AWS SIR
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Handling AttachmentAdded event for case {case_id}")
+            # Handle attachment synchronization
+            attachments = case_detail.get("caseAttachments", [])
+            if not attachments:
+                # Also check for 'attachments' key as used in some events
+                attachments = case_detail.get("attachments", [])
+            
+            if attachments:
+                # Get the latest attachment
+                latest_attachment = attachments[-1] if isinstance(attachments, list) else attachments
+                return self.slack_service.sync_attachment_to_slack(case_id, latest_attachment)
+            else:
+                logger.warning(f"No attachments found in AttachmentAdded event for case {case_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Error handling AttachmentAdded event for case {case_id}: {str(e)}")
             return False
 
     def process_slack_event(self, event: Dict[str, Any]) -> bool:
@@ -1423,7 +1557,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Lambda handler for processing AWS SIR events and syncing to Slack.
     
     Args:
-        event: EventBridge event containing AWS SIR case information
+        event: EventBridge event containing AWS SIR case information or Records format
         context: Lambda context object
         
     Returns:
@@ -1433,12 +1567,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Processing event: {json.dumps(event, default=str)}")
         
         EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "security-ir")
-        event_source = event.get("source", "")
+        
+        # Parse event - support both Records format and direct EventBridge format
+        actual_event = event
+        if "Records" in event and len(event["Records"]) > 0:
+            # Records format: event['Records'][0]['body'] contains the EventBridge event
+            record_body = event["Records"][0]["body"]
+            if isinstance(record_body, str):
+                actual_event = json.loads(record_body)
+            else:
+                actual_event = record_body
+            logger.info(f"Parsed EventBridge event from Records: {json.dumps(actual_event, default=str)}")
+        
+        event_source = actual_event.get("source", "")
         
         # Only process events from Security Incident Response
         if event_source == EVENT_SOURCE:
             incident_service = IncidentService()
-            success = incident_service.process_case_event(event)
+            success = incident_service.process_case_event(actual_event)
             
             if success:
                 return {
