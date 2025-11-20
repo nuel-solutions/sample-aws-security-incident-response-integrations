@@ -8,7 +8,10 @@ import logging
 import os
 import re
 import datetime
-from typing import Dict, Any, Optional, List, Tuple, Union
+import time
+import secrets
+from functools import wraps
+from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
 import boto3
 from botocore.exceptions import ClientError
@@ -65,6 +68,48 @@ except ImportError:
     )
 
 
+def exponential_backoff_retry(max_retries: int = 3, base_delay: float = 1.0, max_delay: float = 60.0):
+    """
+    Decorator for exponential backoff retry logic.
+    
+    Args:
+        max_retries (int): Maximum number of retry attempts
+        base_delay (float): Base delay in seconds
+        max_delay (float): Maximum delay in seconds
+    
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    
+                    if attempt == max_retries:
+                        logger.error(f"Function {func.__name__} failed after {max_retries} retries: {str(e)}")
+                        raise e
+                    
+                    # Calculate delay with exponential backoff and jitter
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    jitter = secrets.randbelow(int(delay * 0.1 * 1000)) / 1000.0  # Add up to 10% jitter (cryptographically secure)
+                    total_delay = delay + jitter
+                    
+                    logger.warning(f"Function {func.__name__} failed on attempt {attempt + 1}, retrying in {total_delay:.2f}s: {str(e)}")
+                    time.sleep(total_delay)
+            
+            # This should never be reached, but just in case
+            raise last_exception
+        
+        return wrapper
+    return decorator
+
+
 class DatabaseService:
     """Class to handle database operations"""
 
@@ -97,6 +142,7 @@ class DatabaseService:
             logger.error(f"Slack channel for Case#{case_id} not found in database")
             return None
 
+    @exponential_backoff_retry(max_retries=3, base_delay=0.5, max_delay=15.0)
     def update_slack_mapping(self, case_id: str, slack_channel_id: str) -> bool:
         """Update the mapping between an IR case and a Slack channel.
 
@@ -125,6 +171,7 @@ class DatabaseService:
             logger.error(f"Error updating DynamoDB table: {error_code}")
             return False
 
+    @exponential_backoff_retry(max_retries=3, base_delay=0.5, max_delay=15.0)
     def update_case_details(
         self, case_id: str, case_title: str = None, case_description: str = None, 
         case_comments: List[Any] = None
@@ -200,9 +247,17 @@ class SlackService:
 
     def __init__(self):
         """Initialize the Slack service."""
+        # Validate required environment variables
+        slack_bot_token_param = os.environ.get('SLACK_BOT_TOKEN', '/SecurityIncidentResponse/slackBotToken')
+        if not slack_bot_token_param:
+            raise ValueError("SLACK_BOT_TOKEN environment variable is required")
+        
+        logger.info(f"Using Slack bot token parameter: {slack_bot_token_param}")
+        
         self.slack_client = SlackBoltClient()
         self.db_service = DatabaseService()
 
+    @exponential_backoff_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def create_channel_for_case(self, case_id: str, case_data: Dict[str, Any]) -> Optional[str]:
         """Create a Slack channel for a new case.
 
@@ -265,6 +320,7 @@ class SlackService:
             self._add_system_comment_to_case(case_id, error_comment)
             return None
 
+    @exponential_backoff_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def update_channel_for_case(self, case_id: str, case_data: Dict[str, Any], 
                                update_type: str) -> bool:
         """Update a Slack channel for an existing case.
@@ -325,6 +381,7 @@ class SlackService:
             self._add_system_comment_to_case(case_id, error_comment)
             return False
 
+    @exponential_backoff_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def sync_comment_to_slack(self, case_id: str, comment: Dict[str, Any]) -> bool:
         """Sync a comment from AWS SIR to Slack with duplicate detection.
 
@@ -743,6 +800,7 @@ class SlackService:
             logger.warning(f"Could not get user name for {user_id}: {str(e)}")
             return user_id
 
+    @exponential_backoff_retry(max_retries=3, base_delay=1.0, max_delay=30.0)
     def sync_attachment_to_slack(self, case_id: str, attachment: Dict[str, Any]) -> bool:
         """Sync an attachment from AWS SIR to Slack channel.
 
@@ -765,9 +823,93 @@ class SlackService:
                 logger.warning(f"No Slack channel found for case {case_id}")
                 return False
 
-            # Check file size limits (Slack has 1GB limit, but we'll be more conservative)
+            # Extract attachment details
+            attachment_id = attachment.get("attachmentId", "")
+            filename = attachment.get("fileName", "attachment")
+            
+            # Check file size limits before download if size is available
+            max_size = 100 * 1024 * 1024  # 100MB
             file_size = attachment.get("size", 0)
-            max_size = 100 * 1024 * 1024  # 100MB limit
+            if file_size > max_size:
+                # Add system comment to AWS SIR case about size limit
+                error_comment = create_system_comment(
+                    f"Large attachment '{filename}' ({file_size} bytes) could not be uploaded to Slack due to size limits"
+                )
+                self._add_system_comment_to_case(case_id, error_comment)
+                return False
+            
+            # Download attachment from AWS SIR
+            try:
+                # Get presigned URL for download
+                presigned_response = security_incident_response_client.get_case_attachment_download_url(
+                    caseId=case_id,
+                    attachmentId=attachment_id
+                )
+                
+                download_url = presigned_response.get("attachmentPresignedUrl")
+                if not download_url:
+                    logger.error(f"Failed to get download URL for attachment {attachment_id}")
+                    return False
+
+                # Download the file content
+                import requests
+                response = requests.get(download_url, timeout=30)
+                response.raise_for_status()
+                
+                file_content = response.content
+                
+                # Check file size limits (Slack has a 1GB limit, but we'll be more conservative)
+                max_size = 100 * 1024 * 1024  # 100MB
+                if len(file_content) > max_size:
+                    # Post a message about the large file instead
+                    message = f"📎 Large attachment '{filename}' ({len(file_content)} bytes) from AWS SIR case {case_id} could not be uploaded due to size limits. Please download from the Security IR case."
+                    self.slack_client.post_message(slack_channel_id, message)
+                    
+                    # Also add system comment to AWS SIR case
+                    error_comment = create_system_comment(
+                        f"Large attachment '{filename}' ({len(file_content)} bytes) could not be uploaded to Slack due to size limits"
+                    )
+                    self._add_system_comment_to_case(case_id, error_comment)
+                    return False
+                
+                # Upload to Slack
+                success = self.slack_client.upload_file(
+                    channel_id=slack_channel_id,
+                    file_content=file_content,
+                    filename=filename,
+                    title=f"Attachment from AWS SIR Case {case_id}",
+                    initial_comment=f"📎 Attachment from AWS Security Incident Response case {case_id}"
+                )
+                
+                if success:
+                    logger.info(f"Successfully synced attachment {filename} to Slack for case {case_id}")
+                    return True
+                else:
+                    logger.error(f"Failed to upload attachment {filename} to Slack for case {case_id}")
+                    # Add system comment to AWS SIR case about upload failure
+                    error_comment = create_system_comment(
+                        f"Failed to upload attachment '{filename}' to Slack"
+                    )
+                    self._add_system_comment_to_case(case_id, error_comment)
+                    return False
+                    
+            except Exception as download_error:
+                logger.error(f"Error downloading attachment {attachment_id}: {str(download_error)}")
+                # Post error message to Slack
+                error_message = f"❌ Failed to sync attachment '{filename}' from AWS SIR case {case_id}: {str(download_error)}"
+                self.slack_client.post_message(slack_channel_id, error_message)
+                
+                # Also add system comment to AWS SIR case
+                error_comment = create_system_comment(
+                    f"Failed to sync attachment '{filename}' to Slack",
+                    str(download_error)
+                )
+                self._add_system_comment_to_case(case_id, error_comment)
+                return False
+
+        except Exception as e:
+            logger.error(f"Error syncing attachment to Slack for case {case_id}: {str(e)}")
+            return False
             
             if file_size > max_size:
                 error_msg = f"Attachment '{attachment.get('filename', 'unknown')}' exceeds size limit ({file_size} bytes > {max_size} bytes)"
@@ -1210,12 +1352,212 @@ class IncidentService:
             return False
 
 
+class IncidentService:
+    """Class to handle incident operations"""
+
+    def __init__(self):
+        """Initialize the incident service."""
+        self.slack_service = SlackService()
+        self.db_service = DatabaseService()
+
+    def extract_case_details(
+        self, ir_case: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], str, str, str]:
+        """Extract case details from an IR case.
+
+        Args:
+            ir_case (Dict[str, Any]): IR case data
+
+        Returns:
+            Tuple[Dict[str, Any], str, str, str]: Tuple of (ir_case_detail, ir_event_type, ir_case_id, sir_case_status)
+        """
+        ir_case_detail = ir_case["detail"]
+        ir_event_type = ir_case_detail["eventType"]
+        ir_case_arn = ir_case_detail["caseArn"]
+
+        try:
+            # TODO: update the following to retrieve GUID from ARN when the service starts using GUIDs
+            ir_case_id = re.search(r"/(\d+)$", ir_case_arn).group(1)
+        except (AttributeError, IndexError):
+            logger.error(f"Failed to extract case ID from ARN: {ir_case_arn}")
+            raise ValueError(f"Invalid case ARN format: {ir_case_arn}")
+
+        sir_case_status = ir_case_detail.get("caseStatus")
+
+        return ir_case_detail, ir_event_type, ir_case_id, sir_case_status
+
+    def process_case_event(self, ir_case: Dict[str, Any]) -> bool:
+        """Process a security incident event from AWS SIR.
+
+        Args:
+            ir_case (Dict[str, Any]): IR case data
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # Extract case details
+            ir_case_detail, ir_event_type, ir_case_id, sir_case_status = (
+                self.extract_case_details(ir_case)
+            )
+
+            # Handle based on event type using dedicated handler methods
+            if ir_event_type == "CaseCreated":
+                return self.handle_case_created(ir_case_id, ir_case_detail)
+            elif ir_event_type == "CaseUpdated":
+                return self.handle_case_updated(ir_case_id, ir_case_detail)
+            elif ir_event_type == "CommentAdded":
+                return self.handle_comment_added(ir_case_id, ir_case_detail)
+            elif ir_event_type == "AttachmentAdded":
+                return self.handle_attachment_added(ir_case_id, ir_case_detail)
+            else:
+                logger.warning(f"Unhandled event type: {ir_event_type}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error processing security incident: {str(e)}")
+            return False
+
+    def handle_case_created(self, case_id: str, case_detail: Dict[str, Any]) -> bool:
+        """Handle CaseCreated event by creating a new Slack channel.
+
+        Args:
+            case_id (str): The IR case ID
+            case_detail (Dict[str, Any]): Case detail data from AWS SIR
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Handling CaseCreated event for case {case_id}")
+            channel_id = self.slack_service.create_channel_for_case(case_id, case_detail)
+            return channel_id is not None
+        except Exception as e:
+            logger.error(f"Error handling CaseCreated event for case {case_id}: {str(e)}")
+            return False
+
+    def handle_case_updated(self, case_id: str, case_detail: Dict[str, Any]) -> bool:
+        """Handle CaseUpdated event by updating the Slack channel.
+
+        Args:
+            case_id (str): The IR case ID
+            case_detail (Dict[str, Any]): Case detail data from AWS SIR
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Handling CaseUpdated event for case {case_id}")
+            # Determine update type based on changed fields
+            update_type = self._determine_update_type(case_detail)
+            return self.slack_service.update_channel_for_case(
+                case_id, case_detail, update_type
+            )
+        except Exception as e:
+            logger.error(f"Error handling CaseUpdated event for case {case_id}: {str(e)}")
+            return False
+
+    def handle_comment_added(self, case_id: str, case_detail: Dict[str, Any]) -> bool:
+        """Handle CommentAdded event by syncing comment to Slack.
+
+        Args:
+            case_id (str): The IR case ID
+            case_detail (Dict[str, Any]): Case detail data from AWS SIR
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Handling CommentAdded event for case {case_id}")
+            # Handle comment synchronization
+            comments = case_detail.get("caseComments", [])
+            if comments:
+                # Get the latest comment
+                latest_comment = comments[-1] if isinstance(comments, list) else comments
+                return self.slack_service.sync_comment_to_slack(case_id, latest_comment)
+            else:
+                logger.warning(f"No comments found in CommentAdded event for case {case_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Error handling CommentAdded event for case {case_id}: {str(e)}")
+            return False
+
+    def handle_attachment_added(self, case_id: str, case_detail: Dict[str, Any]) -> bool:
+        """Handle AttachmentAdded event by syncing attachment to Slack.
+
+        Args:
+            case_id (str): The IR case ID
+            case_detail (Dict[str, Any]): Case detail data from AWS SIR
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info(f"Handling AttachmentAdded event for case {case_id}")
+            # Handle attachment synchronization
+            attachments = case_detail.get("caseAttachments", [])
+            if not attachments:
+                # Also check for 'attachments' key as used in some events
+                attachments = case_detail.get("attachments", [])
+            
+            if attachments:
+                # Get the latest attachment
+                latest_attachment = attachments[-1] if isinstance(attachments, list) else attachments
+                return self.slack_service.sync_attachment_to_slack(case_id, latest_attachment)
+            else:
+                logger.warning(f"No attachments found in AttachmentAdded event for case {case_id}")
+                return True
+        except Exception as e:
+            logger.error(f"Error handling AttachmentAdded event for case {case_id}: {str(e)}")
+            return False
+
+    def process_slack_event(self, event: Dict[str, Any]) -> bool:
+        """Process a Slack event (for future use with bidirectional sync).
+
+        Args:
+            event (Dict[str, Any]): Slack event data
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            # This would handle events from Slack (messages, file uploads, etc.)
+            # For now, this is a placeholder for future bidirectional sync
+            logger.info("Slack event processing not yet implemented")
+            return True
+        except Exception as e:
+            logger.error(f"Error processing Slack event: {str(e)}")
+            return False
+
+    def _determine_update_type(self, case_detail: Dict[str, Any]) -> str:
+        """Determine the type of case update based on changed fields.
+
+        Args:
+            case_detail (Dict[str, Any]): Case detail data
+
+        Returns:
+            str: Update type (status, title, description, watchers, etc.)
+        """
+        # This is a simplified implementation - in practice, you might want to
+        # compare with previous state to determine what actually changed
+        if "caseStatus" in case_detail:
+            return "status"
+        elif "title" in case_detail:
+            return "title"
+        elif "description" in case_detail:
+            return "description"
+        elif "watchers" in case_detail:
+            return "watchers"
+        else:
+            return "general"
+
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Lambda handler for processing AWS SIR events and Slack events.
+    Lambda handler for processing AWS SIR events and syncing to Slack.
     
     Args:
-        event: EventBridge event containing AWS SIR case information or Slack event
+        event: EventBridge event containing AWS SIR case information or Records format
         context: Lambda context object
         
     Returns:
@@ -1256,7 +1598,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     "body": json.dumps({"error": "Failed to process event"})
                 }
         else:
-            logger.info(f"Slack Client lambda will skip processing event from non-configured source: {event_source}")
+            logger.info(f"Slack Client lambda will skip processing event from source: {event_source}")
             return {
                 "statusCode": 200,
                 "body": json.dumps(f"Event skipped - source {event_source} not matching EVENT_SOURCE {EVENT_SOURCE}")
