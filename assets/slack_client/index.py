@@ -1567,25 +1567,27 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.info(f"Processing event: {json.dumps(event, default=str)}")
         
         EVENT_SOURCE = os.environ.get("EVENT_SOURCE", "security-ir")
-        event_source = event.get("source", "")
         
-        # Only process events from the configured EVENT_SOURCE
+        # Parse event - support both Records format and direct EventBridge format
+        actual_event = event
+        if "Records" in event:
+            if len(event["Records"]) == 0:
+                raise ValueError("Empty Records array - no event to process")
+            
+            # Records format: event['Records'][0]['body'] contains the EventBridge event
+            record_body = event["Records"][0]["body"]
+            if isinstance(record_body, str):
+                actual_event = json.loads(record_body)
+            else:
+                actual_event = record_body
+            logger.info(f"Parsed EventBridge event from Records: {json.dumps(actual_event, default=str)}")
+        
+        event_source = actual_event.get("source", "")
+        
+        # Only process events from Security Incident Response
         if event_source == EVENT_SOURCE:
             incident_service = IncidentService()
-            
-            # Process based on event source
-            if event_source == "security-ir":
-                # Process AWS SIR events
-                success = incident_service.process_case_event(event)
-            elif event_source == "slack":
-                # Process Slack events
-                success = incident_service.process_slack_event(event)
-            else:
-                logger.info(f"Slack Client lambda will skip processing event from unsupported source: {event_source}")
-                return {
-                    "statusCode": 200,
-                    "body": json.dumps(f"Event skipped - unsupported source: {event_source}")
-                }
+            success = incident_service.process_case_event(actual_event)
             
             if success:
                 return {
