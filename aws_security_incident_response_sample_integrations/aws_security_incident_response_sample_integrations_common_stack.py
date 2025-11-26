@@ -22,6 +22,7 @@ from .constants import (
     SECURITY_IR_EVENT_SOURCE,
     JIRA_EVENT_SOURCE,
     SERVICE_NOW_EVENT_SOURCE,
+    SLACK_EVENT_SOURCE,
 )
 
 
@@ -226,6 +227,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             environment={
                 "JIRA_EVENT_SOURCE": JIRA_EVENT_SOURCE,
                 "SERVICE_NOW_EVENT_SOURCE": SERVICE_NOW_EVENT_SOURCE,
+                "SLACK_EVENT_SOURCE": SLACK_EVENT_SOURCE,
                 "INCIDENTS_TABLE_NAME": self.table.table_name,
                 "LOG_LEVEL": self.log_level_param.value_as_string,
             },
@@ -238,7 +240,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             "security-ir-client-rule",
             description="Rule to send all events to Security Incident Response Client lambda function",
             event_pattern=aws_events.EventPattern(
-                source=[JIRA_EVENT_SOURCE, SERVICE_NOW_EVENT_SOURCE]
+                source=[JIRA_EVENT_SOURCE, SERVICE_NOW_EVENT_SOURCE, SLACK_EVENT_SOURCE]
             ),
             event_bus=self.event_bus,
         )
