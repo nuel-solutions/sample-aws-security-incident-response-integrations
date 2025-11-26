@@ -9,15 +9,11 @@ import sys
 import os
 import importlib.util
 
-# Get the path to the slack_command_handler index.py
-slack_command_handler_path = os.path.join(
-    os.path.dirname(__file__), '..', '..', '..', 'assets', 'slack_command_handler', 'index.py'
-)
-
 # Mock AWS clients before importing
 with patch('boto3.client'), patch('boto3.resource'):
-    # Load the module with a unique name to avoid conflicts
-    spec = importlib.util.spec_from_file_location("slack_command_handler_index", slack_command_handler_path)
+    # Load the module directly from the file path to avoid name collisions
+    module_path = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'assets', 'slack_command_handler', 'index.py')
+    spec = importlib.util.spec_from_file_location("slack_command_handler_index", module_path)
     index = importlib.util.module_from_spec(spec)
     sys.modules['slack_command_handler_index'] = index
     spec.loader.exec_module(index)
