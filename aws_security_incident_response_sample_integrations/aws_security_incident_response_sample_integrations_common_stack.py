@@ -21,6 +21,7 @@ from .constants import (
     SECURITY_IR_EVENT_SOURCE,
     JIRA_EVENT_SOURCE,
     SERVICE_NOW_EVENT_SOURCE,
+    SLACK_EVENT_SOURCE,
 )
 
 
@@ -257,10 +258,11 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
                     "SERVICE_NOW_INSTANCE_ID": service_now_params[
                         "instance_id_param_name"
                     ],
-                    "SERVICE_NOW_USERNAME": service_now_params["username_param_name"],
-                    "SERVICE_NOW_PASSWORD_PARAM_NAME": service_now_params[
-                        "password_param_name"
-                    ],
+                    "SERVICE_NOW_CLIENT_ID": service_now_params.get("client_id_param_name", ""),
+                    "SERVICE_NOW_CLIENT_SECRET_PARAM": service_now_params.get("client_secret_param_name", ""),
+                    "SERVICE_NOW_USER_ID": service_now_params.get("user_id_param_name", ""),
+                    "PRIVATE_KEY_ASSET_BUCKET": service_now_params.get("private_key_asset_bucket_param_name", ""),
+                    "PRIVATE_KEY_ASSET_KEY": service_now_params.get("private_key_asset_key_param_name", ""),
                 }
             )
 
@@ -271,7 +273,13 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             runtime=aws_lambda.Runtime.PYTHON_3_13,
             timeout=Duration.minutes(15),
             layers=[self.domain_layer, self.mappers_layer, self.wrappers_layer],
-            environment=environment_vars,
+            environment={
+                "JIRA_EVENT_SOURCE": JIRA_EVENT_SOURCE,
+                "SERVICE_NOW_EVENT_SOURCE": SERVICE_NOW_EVENT_SOURCE,
+                "SLACK_EVENT_SOURCE": SLACK_EVENT_SOURCE,
+                "INCIDENTS_TABLE_NAME": self.table.table_name,
+                "LOG_LEVEL": self.log_level_param.value_as_string,
+            },
             role=security_ir_client_role,
         )
 
@@ -281,7 +289,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             "security-ir-client-rule",
             description="Rule to send all events to Security Incident Response Client lambda function",
             event_pattern=aws_events.EventPattern(
-                source=[JIRA_EVENT_SOURCE, SERVICE_NOW_EVENT_SOURCE]
+                source=[JIRA_EVENT_SOURCE, SERVICE_NOW_EVENT_SOURCE, SLACK_EVENT_SOURCE]
             ),
             event_bus=self.event_bus,
         )
@@ -322,15 +330,18 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
 
         # Add SSM permissions for ServiceNow parameters if provided
         if service_now_params:
+            ssm_resources = [f"arn:aws:ssm:{self.region}:{self.account}:parameter{service_now_params['instance_id_param_name']}"]
+            
+            # Add OAuth parameters if they exist
+            for param_key in ['client_id_param_name', 'client_secret_param_name', 'user_id_param_name', 'private_key_asset_bucket_param_name', 'private_key_asset_key_param_name']:
+                if param_key in service_now_params and service_now_params[param_key]:
+                    ssm_resources.append(f"arn:aws:ssm:{self.region}:{self.account}:parameter{service_now_params[param_key]}")
+            
             self.security_ir_client.add_to_role_policy(
                 aws_iam.PolicyStatement(
                     effect=aws_iam.Effect.ALLOW,
                     actions=["ssm:GetParameter"],
-                    resources=[
-                        f"arn:aws:ssm:{self.region}:{self.account}:parameter{service_now_params['instance_id_param_name']}",
-                        f"arn:aws:ssm:{self.region}:{self.account}:parameter{service_now_params['username_param_name']}",
-                        f"arn:aws:ssm:{self.region}:{self.account}:parameter{service_now_params['password_param_name']}",
-                    ],
+                    resources=ssm_resources,
                 )
             )
 
@@ -417,7 +428,7 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
             True,
         )
 
-    def update_security_ir_client_env(self, service_now_params):
+    def update_security_ir_client_env(self, service_now_params: dict) -> None:
         """Update security_ir_client environment variables with ServiceNow parameters.
 
         Args:
@@ -429,11 +440,20 @@ class AwsSecurityIncidentResponseSampleIntegrationsCommonStack(Stack):
                 "SERVICE_NOW_INSTANCE_ID", service_now_params["instance_id_param_name"]
             )
             self.security_ir_client.add_environment(
-                "SERVICE_NOW_USERNAME", service_now_params["username_param_name"]
+                "SERVICE_NOW_CLIENT_ID", service_now_params.get("client_id_param_name", "")
             )
             self.security_ir_client.add_environment(
-                "SERVICE_NOW_PASSWORD_PARAM_NAME",
-                service_now_params["password_param_name"],
+                "SERVICE_NOW_CLIENT_SECRET_PARAM",
+                service_now_params.get("client_secret_param_name", ""),
+            )
+            self.security_ir_client.add_environment(
+                "SERVICE_NOW_USER_ID", service_now_params.get("user_id_param_name", "")
+            )
+            self.security_ir_client.add_environment(
+                "PRIVATE_KEY_ASSET_BUCKET", service_now_params.get("private_key_asset_bucket_param_name", "")
+            )
+            self.security_ir_client.add_environment(
+                "PRIVATE_KEY_ASSET_KEY", service_now_params.get("private_key_asset_key_param_name", "")
             )
             self.security_ir_client.add_environment(
                 "INTEGRATION_MODULE",

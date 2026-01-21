@@ -5,12 +5,27 @@ This document provides an overview of the AWS Security Incident Response Service
 ## Deployment
 
 ```bash
-# Deploy the integration with a single command
+# Deploy the integration with JWT OAuth authentication
 ./deploy-integrations-solution.py service-now \
   --instance-id <your-servicenow-instance-id> \
-  --username <your-servicenow-username> \
-  --password <your-servicenow-password> \
+  --client-id <your-oauth-client-id> \
+  --client-secret <your-oauth-client-secret> \
+  --user-id <your-servicenow-user-id> \
+  --private-key-path <path-to-private-key-file> \
   --integration-module <itsm|ir> \
+  --log-level <info|error|debug>
+```
+
+Eg.
+```bash
+# Deploy the integration with JWT OAuth authentication
+./deploy-integrations-solution.py service-now \
+  --instance-id dev1234 \
+  --client-id test-1234 \
+  --client-secret "XXXXXXXXXXXXXXXXXXXX" \
+  --user-id abcd.1234 \
+  --private-key-path private.key \
+  --integration-module ir \
   --log-level info
 ```
 
@@ -20,6 +35,28 @@ This document provides an overview of the AWS Security Incident Response Service
 - **`ir`**: Incident Response module - Uses ServiceNow Security Incident Response table (`sn_si_incident`)
 
 See the Prerequisites section below for instructions on how to obtain your ServiceNow instance id, username and password, configure aws profile, and install necessary tools required to deploy the integration.
+
+## Authentication Methods
+
+The ServiceNow integration now uses **JWT OAuth authentication** for enhanced security. This method eliminates the need for password management and provides better security through RSA key-based authentication.
+
+### JWT OAuth Authentication (Recommended)
+
+JWT (JSON Web Token) OAuth authentication uses RSA key pairs to generate signed tokens for ServiceNow API access. This method provides:
+
+- **Enhanced Security**: No password storage or transmission
+- **Token-based Access**: Short-lived access tokens (1 hour expiration)
+- **Key-based Signing**: RSA private/public key pair authentication
+- **Automatic Token Refresh**: Tokens are regenerated as needed
+
+#### Benefits of JWT OAuth:
+- Eliminates password management overhead
+- Provides audit trail through OAuth application logs
+- Supports automatic token rotation
+- Follows ServiceNow security best practices
+- Reduces credential exposure risk
+
+**Note:** With JWT OAuth authentication, you no longer need to manage passwords for the integration user. Creating a non-person entity (NPE) orphaned from a User enables the NPE to not be tied to a person that may leave the organization.
 
 ## Prerequisites
 
@@ -33,21 +70,28 @@ See the Prerequisites section below for instructions on how to obtain your Servi
 - URL: `https://dev12345.service-now.com`
 - Instance ID: `dev12345`
 
-### Create a ServiceNow Integration User
+### Setup ServiceNow Integration User
 
 1. Log in to your ServiceNow instance as an administrator
 2. Navigate to User Administration > Users
-3. Click "New" to create a new user
-4. Fill in the required fields:
-   - User ID: `aws_integration` (recommended)
-   - First Name: `AWS`
-   - Last Name: `Integration`
-   - Password: Create a secure password
-5. Assign the following roles:
-   - `admin` (or a custom role with permissions to create business rules)
-   - `incident_manager`
-
-**Best Practice:** Create a dedicated service account rather than using a personal account.
+3. If you do not have a user, click "New" to create a new user
+   1. Fill in the required fields:
+      - User ID: `aws_integration` (recommended)
+      - First Name: `AWS`
+      - Last Name: `Integration`
+4. If you have a user, search with user-id and open the record
+5. Assign the following roles under the `Roles` tab by clicking on `Edit`:
+   - `rest_api_explorer` (or a custom role with permissions to create `Outbound REST Message`)
+   - `web_service_admin` (or a custom role with permissions to create `Outbound REST Message`)
+   - `business_rule_admin` (for performing operations on `Business Rules`)
+   - `incident_manager` (for performing operations on Incidents)
+   - `snc_internal`
+   - `sn_si.analyst` (for performing operations on Security Incidents)
+   - `sn_si.basic` (for performing operations on Security Incidents)
+   - `sn_si.external` (for performing operations on Security Incidents)
+   - `sn_si.integration_user` (for performing operations on Security Incidents)
+   - `sn_si.manager` (for performing operations on Security Incidents)
+   - `sn_si.read` (for performing operations on Security Incidents)
 
 ### Retrieve aws credentials for configuring profile
 
@@ -67,7 +111,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
       2. Keep the **default**, Free tier eligible AMI - `Amazon Linux 2023 kernel-6.1 AMI`
          ![EC2-OS](../images/ec2-os.png)
    3. In `Instance type`:
-      1. Select `t2.large`
+      1. Select `t2.xlarge`
          ![EC2-Instance-type](../images/ec2-instance-type.png)
    4. In `Key pair`, either select an existing key pair from the drop down or create a new one:
          ![EC2-key-pair](../images/ec2-key-pair.png)
@@ -79,6 +123,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    ```
    sudo yum install git -y
    sudo yum install docker
+   sudo yum install openssl
    sudo yum install -y nodejs
    sudo npm install -g aws-cdk
    node -v
@@ -92,13 +137,25 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    sudo systemctl start docker.service
    sudo chmod 666 /var/run/docker.sock
    ```
-5. Configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
+5. Generate X.509 Public Certificate and Private Key using `openssl`
+   1. Generate a private key using RSA 2048 algorithm to be used for ServiceNow cdk deployment and OAuth:
+      ```bash
+      openssl genrsa -out private.key 2048
+      ```
+   2. Generate a self-signed x509 certificate:
+      ```bash
+      openssl req -new -x509 -key private.key -out publickey.cer -days 3650
+      ```
+6. Open `publickey.cer` using the command `vi publickey.cer`, and copy the contents of the certificate
+7. Follow the steps in [Upload/Add the X.509 Certificate in ServiceNow](#uploadadd-the-x509-certificate-in-servicenow) section to create a new certificate in ServiceNow using the copied contents from the previous step
+8. Follow the steps in [Configure OAuth Client Application in ServiceNow](#configure-oauth-client-application-in-servicenow) to create a new client application that will be used to perform the JWT OAuth.
+9. In the EC2 instance, configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
    ```
    export AWS_ACCESS_KEY_ID=<AWS Access Key ID>
    export AWS_SECRET_ACCESS_KEY=<AWS Secret Access Key>
    export AWS_SESSION_TOKEN=<AWS Session Token>
    ```
-6. Now, run the `deploy` command from the [Deployment](#deployment) section
+10. Now, run the `deploy` command from the [Deployment](#deployment) section
 
 #### Using local terminal instance
 
@@ -107,6 +164,7 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    ```
    sudo yum install git -y
    sudo yum install docker
+   sudo yum install openssl
    sudo yum install -y nodejs
    sudo npm install -g aws-cdk
    node -v
@@ -120,13 +178,75 @@ See the Prerequisites section below for instructions on how to obtain your Servi
    sudo systemctl start docker.service
    sudo chmod 666 /var/run/docker.sock
    ```
-3. Configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
+3. Generate X.509 Public Certificate and Private Key using `openssl`
+   1. Generate a private key using RSA 2048 algorithm to be used for ServiceNow cdk deployment and OAuth:
+      ```bash
+      openssl genrsa -out private.key 2048
+      ```
+   2. Generate a self-signed x509 certificate:
+      ```bash
+      openssl req -new -x509 -key private.key -out publickey.cer -days 3650
+      ```
+4. Open `publickey.cer` using the command `vi publickey.cer`, and copy the contents of the certificate
+5. Follow the steps in [Upload/Add the X.509 Certificate in ServiceNow](#uploadadd-the-x509-certificate-in-servicenow) section to create a new certificate in ServiceNow using the copied contents from the previous step
+6. Follow the steps in [Configure OAuth Client Application in ServiceNow](#configure-oauth-client-application-in-servicenow) to create a new client application that will be used to perform the JWT OAuth.
+7. In the local instance, configure aws credentials. Provide the `AWS Access Key ID`, `AWS Secret Access Key` and `AWS Session Token` when prompted:
    ```
    export AWS_ACCESS_KEY_ID=<AWS Access Key ID>
    export AWS_SECRET_ACCESS_KEY=<AWS Secret Access Key>
    export AWS_SESSION_TOKEN=<AWS Session Token>
    ```
-4. Now, run the `deploy` command from the [Deployment](#deployment) section
+8. Now, run the `deploy` command from the [Deployment](#deployment) section
+
+## Configure OAuth in ServiceNow
+
+### Upload/Add the X.509 Certificate in ServiceNow
+
+1. Navigate to **System Definition > Certificates**
+2. Click **New** to create a new certificate record
+3. Fill in the required fields:
+   - **Name**: `AWS Security IR Integration Certificate`
+   - **Format**: `PEM`
+   - **Type**: `Trust Store Certificate`
+4. In the **PEM Certificate** field, paste the contents copied in the previous section from `publickey.cer`
+5. Save the certificate record and note the **Sys ID**
+![X.509 Certificate](../images/image-13.png)
+
+### Configure OAuth Client Application in ServiceNow
+
+1. Navigate to **System OAuth > Application Registry**
+2. Click **New** and select **Create an OAuth API endpoint for external clients**
+3. Fill in the required fields:
+   - **Name**: `AWS Security Incident Response Integration`
+   - **Client ID**: Generate or provide a unique client ID
+   - **Client Secret**: Generate a secure client secret
+   - **Accessible From**: `All application scopes`
+   - **Active**: ✅
+   - **Access Token Lifespan**: `3600`
+   - **Clock skew**: `300`
+   - **Token Format**: `Opaque`
+   - **User field**: `User Id`
+   - **Enable JTI verification**: ✅
+   - **JTI Claim**: `jti`
+   - **JWKS Cache Lifespan**: `720`
+  ![](../images/image-14.png)
+4. Under the **Auth Scopes** section:
+   1. Select or Create a new Auth Scope
+   ![](../images/image-15.png)
+
+      ![](../images/image-16.png)
+5. Under the **JWT Verifier Maps** section:
+   1. Click on New
+   2. Enter the following details
+      - **Name**: `AWS Security Incident Response Integration JWT Verifier`
+      - **Sys certificate**: Click on the `Search` icon and select the `x.509` certificate created in the previous steps
+   ![](../images/image-17.png)
+   ![](../images/image-18.png)
+6. Save the application and note the **Client ID** and **Client Secret**
+
+**Security Note:** Keep the private key secure and never commit it to version control.
+
+**Best Practice:** Create a dedicated service account rather than using a personal account.
 
 ### Secure Your Credentials (Optional)
 
@@ -143,8 +263,10 @@ The ServiceNow integration stack requires the following parameters during deploy
 | Parameter | Description | Type | Required | Example |
 |-----------|-------------|------|----------|--------|
 | `serviceNowInstanceId` | The ServiceNow instance ID (subdomain of your ServiceNow URL) | String | Yes | `dev12345` (from dev12345.service-now.com) |
-| `serviceNowUser` | The username for ServiceNow API access (must have admin privileges to create business rules) | String | Yes | `admin` or `integration_user` |
-| `serviceNowPassword` | The password for ServiceNow API access | String | Yes | `********` |
+| `serviceNowClientId` | The OAuth client ID from ServiceNow OAuth application | String | Yes | `abc123def456` |
+| `serviceNowClientSecret` | The OAuth client secret from ServiceNow OAuth application | String | Yes | `********` |
+| `serviceNowUserId` | The ServiceNow user ID for JWT authentication | String | Yes | `aws_integration` |
+| `privateKeyAssetPath` | Local path to the RSA private key file for JWT signing | String | Yes | `./private.key` |
 | `integrationModule` | ServiceNow integration module type | String | Yes | `itsm` (IT Service Management) or `ir` (Incident Response) |
 | `logLevel` | The log level for Lambda functions | String | No | `info`, `debug`, or `error` (default) |
 
@@ -277,8 +399,11 @@ The ServiceNow integration stack creates the following AWS resources:
 ### SSM Parameters
 
 - `/SecurityIncidentResponse/serviceNowInstanceId`
-- `/SecurityIncidentResponse/serviceNowUser`
-- `/SecurityIncidentResponse/serviceNowPassword`
+- `/SecurityIncidentResponse/serviceNowClientId`
+- `/SecurityIncidentResponse/serviceNowClientSecret`
+- `/SecurityIncidentResponse/serviceNowUserId`
+- `/SecurityIncidentResponse/privateKeyAssetBucket`
+- `/SecurityIncidentResponse/privateKeyAssetKey`
 
 ### IAM Roles
 
@@ -346,9 +471,11 @@ For detailed troubleshooting information, common issues, and diagnostic steps, p
 ## Security Considerations
 
 ### Credential Management
-- ServiceNow credentials are stored securely in SSM Parameter Store
+- ServiceNow OAuth credentials are stored securely in SSM Parameter Store
+- RSA private key for JWT signing is stored as an S3 asset and referenced via SSM parameters
 - API Gateway authentication tokens are managed via AWS Secrets Manager
 - Automatic token rotation is supported for enhanced security
+- JWT tokens are generated dynamically with short expiration times (1 hour)
 
 ### Network Security
 - All communications use HTTPS/TLS encryption
@@ -358,6 +485,8 @@ For detailed troubleshooting information, common issues, and diagnostic steps, p
 ### Access Control
 - Lambda functions use least-privilege IAM roles
 - ServiceNow integration user should have minimal required permissions
+- OAuth application in ServiceNow provides secure API access without password management
+- RSA key-based JWT authentication ensures secure token generation
 - DynamoDB access is restricted to specific table operations
 
 ## Advanced Configuration
@@ -428,16 +557,22 @@ The stack provides the following outputs that can be used for integration:
   
 3. **Deploy the Stack**:
    ```bash
-   # Using the deploy-integrations-solution script
+   # Using the deploy-integrations-solution script with JWT OAuth
    deploy-integrations-solution service-now \
      --instance-id <your-servicenow-instance-id> \
-     --username <your-servicenow-username> \
-     --password <your-servicenow-password> \
+     --client-id <your-oauth-client-id> \
+     --client-secret <your-oauth-client-secret> \
+     --user-id <your-servicenow-user-id> \
+     --private-key-path <path-to-private-key-file> \
      --integration-module <itsm|ir> \
      --log-level info
    ```
    
    **Required Parameters:**
+   - `--client-id`: OAuth client ID from ServiceNow OAuth application
+   - `--client-secret`: OAuth client secret from ServiceNow OAuth application  
+   - `--user-id`: ServiceNow user ID for JWT authentication
+   - `--private-key-path`: Path to RSA private key file for JWT signing
    - `--integration-module`: Choose `itsm` for IT Service Management or `ir` for Incident Response module
    
    **Optional Parameters:**
@@ -485,17 +620,17 @@ A: Yes, the integration supports ServiceNow's Security Incident Response module.
 ### Technical Questions
 
 **Q: What permissions are required in ServiceNow?**  
-A: The integration user needs admin access to create business rules and REST messages, plus access to incident records.
+A: The integration user needs admin access to create business rules and REST messages, plus access to incident records. Additionally, you need to configure an OAuth application with the appropriate public key for JWT verification.
 
 **Q: How are credentials stored?**  
-A: ServiceNow credentials are stored in AWS Systems Manager Parameter Store with secure string parameters.
+A: ServiceNow OAuth credentials are stored in AWS Systems Manager Parameter Store with secure string parameters. The RSA private key for JWT signing is stored as an S3 asset with references in SSM parameters.
 
 **Q: Can I deploy multiple integrations to different ServiceNow instances?**  
 A: Yes, you can deploy the stack multiple times with different parameters to connect to different ServiceNow instances.
 
 ## Related Resources
 
-- [AWS Security Incident Response Documentation](https://docs.aws.amazon.com/security-incident-response/)
+- [AWS Security Incident Response Documentation](https://docs.aws.amazon.com/security-ir/)
 - [ServiceNow API Documentation](https://developer.servicenow.com/dev.do)
 - [ServiceNow Business Rules Documentation](https://docs.servicenow.com/bundle/tokyo-application-development/page/script/business-rules/concept/c_BusinessRules.html)
 - [AWS EventBridge Documentation](https://docs.aws.amazon.com/eventbridge/)

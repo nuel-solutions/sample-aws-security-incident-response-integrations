@@ -61,9 +61,7 @@ lambda_client = boto3.client("lambda")
 
 # Domain events
 class CaseCreatedEvent:
-    """
-    Domain event for case creation
-    """
+    """Domain event for case creation."""
 
     event_type = "CaseCreated"
     event_source = EVENT_SOURCE
@@ -109,9 +107,7 @@ class CaseCreatedEvent:
 
 
 class CaseUpdatedEvent:
-    """
-    Domain event for case update
-    """
+    """Domain event for case update."""
 
     event_type = "CaseUpdated"
     event_source = EVENT_SOURCE
@@ -159,9 +155,7 @@ class CaseUpdatedEvent:
 
 
 class CaseDeletedEvent:
-    """
-    Domain event for case deletion
-    """
+    """Domain event for case deletion."""
 
     event_type = "CaseDeleted"
     event_source = EVENT_SOURCE
@@ -188,9 +182,7 @@ class CaseDeletedEvent:
 
 
 class EventPublisher:
-    """
-    Service for publishing events to EventBridge
-    """
+    """Service for publishing events to EventBridge."""
 
     def __init__(self, event_bus_name):
         """Initialize an EventPublisher.
@@ -236,21 +228,21 @@ class EventPublisher:
             logger.error(traceback.format_exc())
             raise
 
-    def _convert_event_to_dict(self, event):
+    def _convert_event_to_dict(self, event) -> dict:
         """Convert an event object to a dictionary.
 
         Args:
             event: The event to convert
 
         Returns:
-            Dict[str, Any]: Dictionary representation of the event
+            dict: Dictionary representation of the event
         """
         return event.to_dict()
 
 
 # Utility functions
 class DateTimeEncoder(json.JSONEncoder):
-    """Custom JSON encoder for datetime objects"""
+    """Custom JSON encoder for datetime objects."""
 
     def default(self, obj):
         """Convert datetime objects to ISO format strings.
@@ -285,8 +277,7 @@ def json_datetime_encoder(obj: Any) -> str:
 
 
 def get_incidents_from_security_ir() -> Optional[List[Dict[str, Any]]]:
-    """
-    Fetch all incidents from Security Incident Response with pagination support.
+    """Fetch all incidents from Security Incident Response with pagination support.
 
     Returns:
         Optional[List[Dict[str, Any]]]: List of incidents or None if error occurs
@@ -395,6 +386,38 @@ def remove_keys(data: Any, keys_to_exclude: List[str]) -> Any:
         return data
 
 
+def is_slack_originated_update(case_id: str, table_name: str) -> bool:
+    """
+    Check if a case update originated from Slack to prevent notification loops.
+    
+    Args:
+        case_id (str): Case ID to check
+        table_name (str): DynamoDB table name
+        
+    Returns:
+        bool: True if update originated from Slack, False otherwise
+    """
+    try:
+        response = dynamodb_client.get_item(
+            TableName=table_name,
+            Key={"PK": {"S": f"Case#{case_id}"}, "SK": {"S": "slack_update_flag"}}
+        )
+        
+        if "Item" in response:
+            # Flag exists, delete it and return True
+            dynamodb_client.delete_item(
+                TableName=table_name,
+                Key={"PK": {"S": f"Case#{case_id}"}, "SK": {"S": "slack_update_flag"}}
+            )
+            logger.info(f"Detected Slack-originated update for case {case_id}, skipping notification")
+            return True
+            
+        return False
+    except Exception as e:
+        logger.warning(f"Error checking Slack update flag for case {case_id}: {str(e)}")
+        return False
+
+
 def store_incidents_in_dynamodb(
     incidents: List[Dict[str, Any]], table_name: str, event_bus_name: str = "default"
 ) -> bool:
@@ -488,8 +511,12 @@ def store_incidents_in_dynamodb(
                             },
                         )
 
-                        logger.info(f"Publishing CaseUpdatedEvent for: {case_id}")
-                        event_publisher.publish_event(CaseUpdatedEvent(case))
+                        # Check if this update originated from Slack to prevent notification loops
+                        if not is_slack_originated_update(case_id, table_name):
+                            logger.info(f"Publishing CaseUpdatedEvent for: {case_id}")
+                            event_publisher.publish_event(CaseUpdatedEvent(case))
+                        else:
+                            logger.info(f"Skipping CaseUpdatedEvent for Slack-originated update: {case_id}")
                 else:
                     # Create new incident
                     dynamodb_client.put_item(
